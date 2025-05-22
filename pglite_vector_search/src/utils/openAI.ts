@@ -1,0 +1,40 @@
+import { OpenAI } from 'openai';
+
+// OpenAI SDKでOllamaのローカルエンドポイントを使用
+const openai = new OpenAI({
+    baseURL: 'http://localhost:11434/v1', // Ollama のエンドポイント
+    apiKey: 'ollama', // 任意の文字列でOK（認証が不要な場合もある）
+    dangerouslyAllowBrowser: true,
+});
+
+const chatModel = 'gemma3:1b';
+const embedModel = 'kun432/cl-nagoya-ruri-base:latest';
+
+export async function getChatMessage(userMessage: string): Promise<string> {
+    try {
+        const response = await openai.chat.completions.create({
+            model: chatModel,
+            messages: [
+                { role: 'system', content: '必ず日本語で回答してください。' },
+                { role: 'user', content: userMessage }
+            ]
+        });
+
+        return response.choices[0].message?.content || '';
+    } catch (error) {
+        return '';
+    }
+}
+
+export async function getEmbedding(userMessage: string): Promise<number[]> {
+    try {
+        const response = await openai.embeddings.create({
+            model: embedModel,
+            input: userMessage
+        });
+
+        return response.data[0].embedding || [];
+    } catch (error) {
+        return [];
+    }
+}

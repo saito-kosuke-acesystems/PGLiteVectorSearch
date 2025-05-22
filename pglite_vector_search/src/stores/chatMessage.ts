@@ -1,5 +1,6 @@
 import { defineStore } from 'pinia'
 import { MessageData, SendMessage, State } from '@/models/chatMessage'
+import { getChatMessage, getEmbedding } from '@/utils/openAI'
 
 export const useChatStore = defineStore(
     'chat',
@@ -22,38 +23,18 @@ export const useChatStore = defineStore(
             // ボットから回答を受けメッセージを追加
             async getBotReply(question: string) {
                 // バックエンド連携
-                const backendUrl = '<バックエンドAPIのURL>'
                 const sendMessage: SendMessage = {
                     message: question
                 }
-
-                await fetch(backendUrl, {
-                    method: 'POST',
-                    mode: 'cors',
-                    cache: 'no-cache',
-                    credentials: 'same-origin',
-                    headers: {
-                        'Content-Type': 'application/json',
-                        Accept: 'application/json'
-                    },
-                    body: JSON.stringify(sendMessage)
-                })
+                await getChatMessage(question)
                     .then((response) => {
-                        response
-                            .json()
-                            .then((value) => {
-                                const replyData = value[0]
-                                // 回答構成
-                                const setId = this.messageList.size + 1
-                                this.messageList.set(setId, {
-                                    id: setId,
-                                    message: replyData.reply,
-                                    isBot: true
-                                })
-                            })
-                            .catch((reason) => {
-                                console.error('Error at reply object construction.', reason)
-                            })
+                        // 回答構成
+                        const setId = this.messageList.size + 1
+                        this.messageList.set(setId, {
+                            id: setId,
+                            message: response,
+                            isBot: true
+                        })
                     })
                     .catch((reason) => {
                         if (reason instanceof Error) {
