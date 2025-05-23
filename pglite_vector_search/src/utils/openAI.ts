@@ -2,11 +2,12 @@ import { OpenAI } from 'openai';
 
 // OpenAI SDKでOllamaのローカルエンドポイントを使用
 const openai = new OpenAI({
-    baseURL: 'http://localhost:11434/v1', // Ollama のエンドポイント
-    apiKey: 'ollama', // 任意の文字列でOK（認証が不要な場合もある）
-    dangerouslyAllowBrowser: true,
+    baseURL: 'http://localhost:11434/v1', // Ollamaのエンドポイント
+    apiKey: 'ollama', // Ollamaの場合APIキーは不要（適当な文字列で良い）
+    dangerouslyAllowBrowser: true, // ブラウザからのAPIアクセスを許可（通常はセキュリティリスクから非推奨だが、ローカル利用なので問題無し）
 });
 
+// Ollama上で使用するLLM名
 const chatModel = 'gemma3:1b';
 const embedModel = 'kun432/cl-nagoya-ruri-base:latest';
 
