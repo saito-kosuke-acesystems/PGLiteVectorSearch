@@ -8,6 +8,7 @@
     "lint": "vue-cli-service lint"
   },
   "dependencies": {
+    "@electric-sql/pglite": "^0.3.2",
     "core-js": "^3.8.3",
     "openai": "^4.102.0",
     "pinia": "^3.0.2",
