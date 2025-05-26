@@ -1,6 +1,6 @@
 import { defineStore } from 'pinia'
 import { MessageData, SendMessage, State } from '@/models/chatMessage'
-import { getChatMessage, getEmbedding } from '@/utils/openAI'
+import { generateChatMessage, generateEmbedding } from '@/utils/openAI'
 
 export const useChatStore = defineStore(
     'chat',
@@ -26,7 +26,7 @@ export const useChatStore = defineStore(
                 const sendMessage: SendMessage = {
                     message: question
                 }
-                await getChatMessage(question)
+                await generateChatMessage(question)
                     .then((response) => {
                         // 回答構成
                         const setId = this.messageList.size + 1

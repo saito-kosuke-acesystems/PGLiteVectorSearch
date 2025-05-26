@@ -11,7 +11,7 @@ const openai = new OpenAI({
 const chatModel = 'gemma3:1b';
 const embedModel = 'kun432/cl-nagoya-ruri-base:latest';
 
-export async function getChatMessage(userMessage: string): Promise<string> {
+export async function generateChatMessage(userMessage: string): Promise<string> {
     try {
         const response = await openai.chat.completions.create({
             model: chatModel,
@@ -27,7 +27,7 @@ export async function getChatMessage(userMessage: string): Promise<string> {
     }
 }
 
-export async function getEmbedding(userMessage: string): Promise<number[]> {
+export async function generateEmbedding(userMessage: string): Promise<number[]> {
     try {
         const response = await openai.embeddings.create({
             model: embedModel,
