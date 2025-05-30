@@ -18,11 +18,12 @@ export async function initMemory() {
   await pglite.exec("CREATE EXTENSION IF NOT EXISTS vector;");
 
   // 検索用 memory テーブルを定義
+  // MEMO：vectorの次元数はモデルに依存する為、使用するモデルに合わせて変える事
   await pglite.exec(`
   CREATE TABLE IF NOT EXISTS memory (
     id SERIAL PRIMARY KEY,
     content TEXT NOT NULL,
-    embedding vector(1536)
+    embedding vector(768)
   );
   CREATE INDEX ON memory USING hnsw (embedding vector_cosine_ops);`);
 
