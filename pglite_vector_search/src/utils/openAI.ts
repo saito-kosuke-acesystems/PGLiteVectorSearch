@@ -4,7 +4,7 @@ import { OpenAI } from 'openai';
 const openai = new OpenAI({
     baseURL: 'http://localhost:11434/v1', // Ollamaのエンドポイント
     apiKey: 'ollama', // Ollamaの場合APIキーは不要（適当な文字列で良い）
-    dangerouslyAllowBrowser: true, // ブラウザからのAPIアクセスを許可（通常はセキュリティリスクから非推奨だが、ローカル利用なので問題無し）
+    dangerouslyAllowBrowser: true, // ブラウザからのAPIアクセスを許可（セキュリティリスクがあるので通常は非推奨だが、ローカル利用なので問題無し）
 });
 
 // Ollama上で使用するLLM名
@@ -23,6 +23,7 @@ export async function generateChatMessage(userMessage: string): Promise<string> 
 
         return response.choices[0].message?.content || '';
     } catch (error) {
+        console.error('Error generating chat message:', error);
         return '';
     }
 }
@@ -31,11 +32,13 @@ export async function generateEmbedding(userMessage: string): Promise<number[]> 
     try {
         const response = await openai.embeddings.create({
             model: embedModel,
-            input: userMessage
+            input: userMessage,
+            encoding_format: "float",
         });
 
-        return response.data[0].embedding || [];
+        return response.data?.[0]?.embedding || [];        
     } catch (error) {
+        console.error('Error generating embedding:', error);
         return [];
     }
 }
