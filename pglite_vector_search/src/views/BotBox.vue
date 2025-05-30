@@ -3,8 +3,8 @@ import { computed, onMounted } from 'vue'
 import { useChatStore } from '@/stores/chatMessage'
 import { MessageData } from '@/models/chatMessage'
 import ChatForm from '@/components/ChatForm.vue'
-import { initMemory, insertMemory } from '@/utils/pglite'
-import { generateEmbedding } from '@/utils/openAI'
+import { initMemory } from '@/utils/pglite'
+//import { generateEmbedding } from '@/utils/openAI'
 
 const chatStore = useChatStore()
 const messageList = computed((): Map<number, MessageData> => {
