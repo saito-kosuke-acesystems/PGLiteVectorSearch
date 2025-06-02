@@ -1,7 +1,7 @@
 import { defineStore } from 'pinia'
 import { MessageData, SendMessage, State } from '@/models/chatMessage'
 import { generateChatMessage, generateEmbedding } from '@/utils/openAI'
-import { insertMemory } from '@/utils/pglite'
+import { insertMemory, searchMemory } from '@/utils/pglite'
 
 export const useChatStore = defineStore(
     'chat',
@@ -23,13 +23,21 @@ export const useChatStore = defineStore(
             },
             // ボットから回答を受けメッセージを追加
             async getBotReply(question: string) {
-                // バックエンド連携
-                const sendMessage: SendMessage = {
-                    message: question
-                }
-                await generateChatMessage(question)
+                // 質問をベクトル化し、メモリから関連する情報を取得
+                const vectorQuestion = await generateEmbedding(question)
+                    .catch((reason) => {
+                        errorHandler(reason)
+                        return []
+                    })
+                const memory = await searchMemory(vectorQuestion)
+                    .catch((reason) => {
+                        errorHandler(reason)
+                        return []
+                    })
+
+                // 回答の生成
+                await generateChatMessage(question, memory)
                     .then((response) => {
-                        // 回答構成
                         const setId = this.messageList.size + 1
                         this.messageList.set(setId, {
                             id: setId,
@@ -37,59 +45,51 @@ export const useChatStore = defineStore(
                             isBot: true
                         })
                     })
-                    .catch((reason) => {
-                        if (reason instanceof Error) {
-                            console.error(reason.message, reason.stack)
-                            window.alert(reason.message)
-                        } else {
-                            console.error('Error occured.', reason)
-                            window.alert('エラー発生')
-                        }
-                    })
+                    .catch((reason) => errorHandler(reason))
                     .finally(() => {
                         this.isLoading = false
                     })
             },
             async uploadFile(file: File) {
-                // 拡張子を確認
-                const ext = file.name.split('.').pop()?.toLowerCase()
-                if (!ext || (ext !== 'txt')) {
-                    this.addMessage('TXTファイルをアップロードしてください。', true)
-                    this.isLoading = false
-                    return
-                }
-                // テキストファイルをベクトル化
-                const text = await file.text()
-                const vectorText = await generateEmbedding(text)
-                    .catch((reason) => {
-                        if (reason instanceof Error) {
-                            console.error(reason.message, reason.stack)
-                            window.alert(reason.message)
-                        } else {
-                            console.error('Error occured.', reason)
-                            window.alert('エラー発生')
-                        }
-                    })
+                try {
+                    // 拡張子別にファイルを処理
+                    const ext = file.name.split('.').pop()?.toLowerCase()
+                    let text
+                    switch (ext) {
+                        case 'txt':
+                            text = await file.text()
+                            break
+                        default:
+                            this.addMessage('対応していない拡張子です。', true)
+                            return
+                    }
+                    
+                    
 
-                // ベクトル化結果をpgliteに保存
-                if (vectorText) {
-                    await insertMemory(text, vectorText)
-                        .then(() => {
-                            this.addMessage('ファイルをアップロードしました。', true)
-                        })
-                        .catch((reason) => {
-                            if (reason instanceof Error) {
-                                console.error(reason.message, reason.stack)
-                                window.alert(reason.message)
-                            } else {
-                                console.error('Error occured.', reason)
-                                window.alert('エラー発生')
-                            }
-                        })
-                } else {
-                    this.addMessage('ファイルのアップロードに失敗しました。', true)
+
+                    const vectorText = await generateEmbedding(text)
+                        .catch((reason) => errorHandler(reason))
+                    // ベクトル化結果をpgliteに保存
+                    if (vectorText) {
+                        await insertMemory(text, vectorText)
+                            .then(() => {
+                                this.addMessage('ファイルをアップロードしました。', true)
+                            })
+                            .catch((reason) => errorHandler(reason))
+                    } else {
+                        this.addMessage('ファイルのアップロードに失敗しました。', true)
+                    }
+                } finally {
+                    this.isLoading = false
                 }
-                this.isLoading = false
             }
         }
     })
+
+const errorHandler = (error: unknown) => {
+    if (error instanceof Error) {
+        console.error(error.message, error.stack)
+    } else {
+        console.error('Error occured.', error)
+    }
+}

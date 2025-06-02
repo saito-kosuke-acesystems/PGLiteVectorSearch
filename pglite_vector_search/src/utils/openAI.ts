@@ -11,12 +11,17 @@ const openai = new OpenAI({
 const chatModel = 'gemma3:1b';
 const embedModel = 'kun432/cl-nagoya-ruri-base:latest';
 
-export async function generateChatMessage(userMessage: string): Promise<string> {
+export async function generateChatMessage(userMessage: string, memory: any[]): Promise<string> {
     try {
+        // システムプロンプト作成
+        const systemPrompt = memory.length > 0
+            ? `以下の情報を参考にして、ユーザの質問に答えてください。\n${memory.map(m => m.content).join('\n')}`
+            : 'ユーザの質問に答えてください。';
+
         const response = await openai.chat.completions.create({
             model: chatModel,
             messages: [
-                { role: 'system', content: '必ず日本語で回答してください。' },
+                { role: 'system', content: systemPrompt },
                 { role: 'user', content: userMessage }
             ]
         });

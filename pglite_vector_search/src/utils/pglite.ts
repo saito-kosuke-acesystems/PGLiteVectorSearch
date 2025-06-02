@@ -35,7 +35,7 @@ export async function insertMemory(content: string, embedding: number[]) {
     `INSERT INTO memory (content, embedding) VALUES ('${content}', '${vec}');`);
 }
 
-export async function searchMemory(embedding: string, limit: number = 2): Promise<any[]> {
+export async function searchMemory(embedding: number[], limit: number = 2): Promise<any[]> {
   const vec = JSON.stringify(embedding);
   const result = await pglite.query(
     `SELECT id, content, embedding FROM memory ORDER BY embedding <=> '${vec}' LIMIT ${limit};`
