@@ -34,7 +34,7 @@ export const useChatStore = defineStore(
                         errorHandler(reason)
                         return []
                     })
-
+                console.log('searchMemory result:', memory)
                 // 回答の生成
                 await generateChatMessage(question, memory)
                     .then((response) => {
@@ -65,16 +65,36 @@ export const useChatStore = defineStore(
                             return
                     }
                     
-                    // テキストの分割
-                    const chunkSize = 1000 // とりあえず1000文字ぐらいで様子見
-                    const chunks = text.match(new RegExp(`.{1,${chunkSize}}`, 'g')) || []
+                    // // テキストの分割
+                    // const chunkSize = 500;
+                    // const chunks: string[] = [];
+                    // for (let i = 0; i < text.length; i += chunkSize) {
+                    //     chunks.push(text.slice(i, i + chunkSize));
+                    // }
+
+                    // テキストを「改行＋== 」の直前で分割
+                    const chunks = text.split(/\r?\n==\s+/).map(chunk => chunk.trim()).filter(chunk => chunk.length > 0)
+
+                    // チャンクの文字数が一定値を超える場合はさらに分割
+                    const maxChunkSize = 750;
+                    for (let i = 0; i < chunks.length; i++) {
+                        if (chunks[i].length > maxChunkSize) {
+                            const subChunks: string[] = [];
+                            for (let j = 0; j < chunks[i].length; j += maxChunkSize) {
+                                subChunks.push(chunks[i].slice(j, j + maxChunkSize));
+                            }
+                            chunks.splice(i, 1, ...subChunks);
+                            i += subChunks.length - 1; // インデックスを調整
+                        }
+                    }
 
                     // チャンクをベクトル化し、pgliteに保存
                     for (const chunk of chunks) {
+                        console.log('Processing chunk:', chunk)
                         const vectorchunk = await generateEmbedding(chunk)
                             .catch((reason) => errorHandler(reason))
                         if (vectorchunk) {
-                            await insertMemory(text, vectorchunk)
+                            await insertMemory(chunk, vectorchunk)
                                 .catch((reason) => errorHandler(reason))
                         }
                     }
