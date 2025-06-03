@@ -60,25 +60,26 @@ export const useChatStore = defineStore(
                             text = await file.text()
                             break
                         default:
-                            this.addMessage('対応していない拡張子です。', true)
+                            this.addMessage('対応していないファイル形式です。', true)
+                            this.isLoading = false
                             return
                     }
                     
-                    
+                    // テキストの分割
+                    const chunkSize = 1000 // とりあえず1000文字ぐらいで様子見
+                    const chunks = text.match(new RegExp(`.{1,${chunkSize}}`, 'g')) || []
 
-
-                    const vectorText = await generateEmbedding(text)
-                        .catch((reason) => errorHandler(reason))
-                    // ベクトル化結果をpgliteに保存
-                    if (vectorText) {
-                        await insertMemory(text, vectorText)
-                            .then(() => {
-                                this.addMessage('ファイルをアップロードしました。', true)
-                            })
+                    // チャンクをベクトル化し、pgliteに保存
+                    for (const chunk of chunks) {
+                        const vectorchunk = await generateEmbedding(chunk)
                             .catch((reason) => errorHandler(reason))
-                    } else {
-                        this.addMessage('ファイルのアップロードに失敗しました。', true)
+                        if (vectorchunk) {
+                            await insertMemory(text, vectorchunk)
+                                .catch((reason) => errorHandler(reason))
+                        }
                     }
+
+                    this.addMessage('ファイルのアップロードが完了しました。', true)
                 } finally {
                     this.isLoading = false
                 }
