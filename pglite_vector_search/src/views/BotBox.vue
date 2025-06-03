@@ -25,12 +25,17 @@ onMounted(() => {
     // 3.チャンクをベクトル化する
     // 4.ベクトルをPGliteに保存する
 })
+
+// メッセージのフォーマット関数
+function formatMessage(msg: string): string {
+    return msg.replace(/\n/g, '<br>');
+}
 </script>
 
 <template>
     <div class="container">
         <template v-for="[id, message] in messageList" v-bind:key="id">
-            <div v-if="message.isBot" class="bot-message">{{ message.message }}</div>
+            <div v-if="message.isBot" class="bot-message" v-html="formatMessage(message.message)"></div>
             <div v-else class="user-message">{{ message.message }}</div>
         </template>
         <ChatForm />
