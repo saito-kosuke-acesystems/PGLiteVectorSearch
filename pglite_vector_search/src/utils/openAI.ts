@@ -47,3 +47,18 @@ export async function generateEmbedding(userMessage: string): Promise<number[]> 
         return [];
     }
 }
+
+export async function getDimension(): Promise<number> {
+    try {
+        const response = await openai.embeddings.create({
+            model: embedModel,
+            input: "テスト",
+            encoding_format: "float"
+        });
+        const dimension = response.data?.[0]?.embedding.length;
+        return dimension;
+    } catch (error) {
+        console.error('Error getting model dimension:', error);
+        throw error;
+    }
+}
