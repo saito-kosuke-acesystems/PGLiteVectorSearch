@@ -9,7 +9,7 @@ const openai = new OpenAI({
 
 // Ollama上で使用するLLM名
 const chatModel = 'gemma3:1b';
-const embedModel = 'kun432/cl-nagoya-ruri-base:latest';
+const embeddingModel = 'kun432/cl-nagoya-ruri-base:latest';
 
 export async function generateChatMessage(userMessage: string, memory: any[]): Promise<string> {
     try {
@@ -36,7 +36,7 @@ export async function generateChatMessage(userMessage: string, memory: any[]): P
 export async function generateEmbedding(userMessage: string): Promise<number[]> {
     try {
         const response = await openai.embeddings.create({
-            model: embedModel,
+            model: embeddingModel,
             input: userMessage,
             encoding_format: "float",
         });
@@ -51,7 +51,7 @@ export async function generateEmbedding(userMessage: string): Promise<number[]> 
 export async function getDimension(): Promise<number> {
     try {
         const response = await openai.embeddings.create({
-            model: embedModel,
+            model: embeddingModel,
             input: "テスト",
             encoding_format: "float"
         });
