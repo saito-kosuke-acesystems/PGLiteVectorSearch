@@ -2,6 +2,7 @@ import { defineStore } from 'pinia'
 import { MessageData, SendMessage, State } from '@/models/chatMessage'
 import { generateChatMessage, generateEmbedding } from '@/utils/openAI'
 import { insertMemory, searchMemory } from '@/utils/pglite'
+import { chunkFile } from '@/utils/chunkFile'
 
 export const useChatStore = defineStore(
     'chat',
@@ -52,43 +53,14 @@ export const useChatStore = defineStore(
             },
             async uploadFile(file: File) {
                 try {
-                    // 拡張子別にファイルを処理
-                    const ext = file.name.split('.').pop()?.toLowerCase()
-                    let text
-                    switch (ext) {
-                        case 'txt':
-                            text = await file.text()
-                            break
-                        default:
-                            this.addMessage('対応していないファイル形式です。', true)
-                            this.isLoading = false
-                            return
-                    }
-                    
-                    // // テキストの分割
-                    // const chunkSize = 500;
-                    // const chunks: string[] = [];
-                    // for (let i = 0; i < text.length; i += chunkSize) {
-                    //     chunks.push(text.slice(i, i + chunkSize));
-                    // }
+                    // ファイルをチャンクに分割
+                    const chunks = await chunkFile(file, 1000)
+                        .catch((reason) => {
+                            errorHandler(reason)
+                            return []
+                        })
 
-                    // テキストを「改行＋== 」の直前で分割
-                    const chunks = text.split(/\r?\n==\s+/).map(chunk => chunk.trim()).filter(chunk => chunk.length > 0)
-
-                    // チャンクの文字数が一定値を超える場合はさらに分割
-                    const maxChunkSize = 750;
-                    for (let i = 0; i < chunks.length; i++) {
-                        if (chunks[i].length > maxChunkSize) {
-                            const subChunks: string[] = [];
-                            for (let j = 0; j < chunks[i].length; j += maxChunkSize) {
-                                subChunks.push(chunks[i].slice(j, j + maxChunkSize));
-                            }
-                            chunks.splice(i, 1, ...subChunks);
-                            i += subChunks.length - 1; // インデックスを調整
-                        }
-                    }
-
-                    // チャンクをベクトル化し、pgliteに保存
+                    // チャンク単位でベクトル化し、pgliteに保存
                     for (const chunk of chunks) {
                         console.log('Processing chunk:', chunk)
                         const vectorchunk = await generateEmbedding(chunk)
