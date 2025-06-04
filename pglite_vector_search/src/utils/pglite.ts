@@ -12,7 +12,7 @@ export function getPGlite(): PGlite {
   return pglite;
 }
 
-export async function initMemory() {
+export async function initMemory(dimension: number) {
 
   // ベクトル検索用の pgvector 拡張を有効化
   await pglite.exec("CREATE EXTENSION IF NOT EXISTS vector;");
@@ -23,7 +23,7 @@ export async function initMemory() {
   CREATE TABLE IF NOT EXISTS memory (
     id SERIAL PRIMARY KEY,
     content TEXT NOT NULL,
-    embedding vector(768)
+    embedding vector('${dimension}')
   );
   CREATE INDEX ON memory USING hnsw (embedding vector_cosine_ops);`);
 

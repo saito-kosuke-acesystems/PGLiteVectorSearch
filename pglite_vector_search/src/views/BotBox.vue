@@ -1,9 +1,10 @@
 <script setup lang="ts">
-import { computed, onMounted } from 'vue'
+import { computed, onMounted, ref } from 'vue'
 import { useChatStore } from '@/stores/chatMessage'
 import { MessageData } from '@/models/chatMessage'
 import ChatForm from '@/components/ChatForm.vue'
 import { initMemory } from '@/utils/pglite'
+import { getDimension } from '@/utils/openAI'
 //import { generateEmbedding } from '@/utils/openAI'
 
 const chatStore = useChatStore()
@@ -11,19 +12,25 @@ const messageList = computed((): Map<number, MessageData> => {
     return chatStore.messageList
 })
 
+const initialized = ref(false);
+
 // 初期化処理
 onMounted(() => {
-    // PGliteの初期化
-    initMemory().then(() => {
-        console.log('Memory initialized successfully.');
+    // embeddingModelの次元数を取得
+    getDimension().then((dimension) => {
+        console.log('Embedding dimension:', dimension);
+        // PGliteの初期化
+        initMemory(dimension).then(() => {
+            console.log('Memory initialized successfully.');
+            initialized.value = true;
+        }).catch((error) => {
+            console.error('Error initializing memory:', error);
+            window.alert('Memory initialization failed. Please check the console for details.');
+        });
     }).catch((error) => {
-        console.error('Error initializing memory:', error);
+        console.error('Error getting embedding dimension:', error);
+        window.alert('Embedding model initialization failed. Please check the console for details.');
     });
-    // TODO
-    // 1.ドキュメントを読み込む
-    // 2.ドキュメントのチャンクを生成する
-    // 3.チャンクをベクトル化する
-    // 4.ベクトルをPGliteに保存する
 })
 
 // メッセージのフォーマット関数
@@ -38,7 +45,7 @@ function formatMessage(msg: string): string {
             <div v-if="message.isBot" class="bot-message" v-html="formatMessage(message.message)"></div>
             <div v-else class="user-message">{{ message.message }}</div>
         </template>
-        <ChatForm />
+        <ChatForm v-if="initialized"/>
     </div>
 </template>
 
