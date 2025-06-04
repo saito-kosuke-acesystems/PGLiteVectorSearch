@@ -6,6 +6,7 @@ const chatStore = useChatStore()
 
 const sendMessage = ref('')
 const uploadedFile = ref<File | null>(null)
+const fileInputRef = ref<HTMLInputElement | null>(null)
 
 const isLoading = computed((): boolean => {
     return chatStore.isLoading
@@ -16,6 +17,10 @@ const onSendMessage = (): void => {
     chatStore.addMessage(sendMessage.value)
     chatStore.getBotReply(sendMessage.value)
     sendMessage.value = ''
+}
+
+const onFileButtonClick = () => {
+    fileInputRef.value?.click()
 }
 
 const onFileChange = async (event: Event) => {
@@ -40,8 +45,8 @@ onUpdated((): void => {
 <template>
     <form v-on:submit.prevent="onSendMessage" class="send-form">
         <label class="file-upload-label">
-            <input type="file" @change="onFileChange" class="file-input" />
-            <span class="submit-btn">RAG追加</span>
+        <input ref="fileInputRef" type="file" @change="onFileChange" class="file-input" style="display:none" />
+        <button type="button" @click="onFileButtonClick" :disabled="isLoading" class="submit-btn">RAG追加</button>
         </label>
         <input type="text" id="sendMessage" v-model="sendMessage" required class="input-text" />
         <button type="submit" v-bind:disabled="isLoading" class="submit-btn" >送信</button>
