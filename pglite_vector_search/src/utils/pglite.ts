@@ -31,8 +31,11 @@ export async function initMemory(dimension: number) {
 
 export async function insertMemory(content: string, embedding: number[]) {
   const vec = JSON.stringify(embedding);
+  // contentとvecをエスケープ
+  const safeContent = content.replace(/'/g, "''");
+  const safeVec = vec.replace(/'/g, "''");
   await pglite.exec(
-    `INSERT INTO memory (content, embedding) VALUES ('${content}', '${vec}');`);
+    `INSERT INTO memory (content, embedding) VALUES ('${safeContent}', '${safeVec}')`);
 }
 
 export async function searchMemory(embedding: number[], limit: number = 3): Promise<any[]> {
