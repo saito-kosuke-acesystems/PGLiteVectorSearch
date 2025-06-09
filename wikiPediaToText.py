@@ -1,41 +1,43 @@
 import requests
+import html2text
 import os
+import re
 
 # wikiPediaToText.py
 # 日本語版ウィキペからテキストデータを取得するスクリプト
-S = requests.Session()
 
 URL = "https://ja.wikipedia.org/w/api.php"
-title = "機動戦士Gundam GQuuuuuuX"  # 取得したいページのタイトルを指定
+title = "Mrs. GREEN APPLE"
 
 PARAMS = {
-    "action": "query",
-    "prop": "extracts",
-    "explaintext": 1,
-    "titles": title,
-    "format": "json"
+    "action": "parse",
+    "page": title,
+    "format": "json",
+    "prop": "text"
 }
 
-R = S.get(url=URL, params=PARAMS)
+R = requests.get(url=URL, params=PARAMS)
 DATA = R.json()
+html = DATA["parse"]["text"]["*"]
 
-pages = DATA["query"]["pages"]
-for page_id in pages:
-    extract = pages[page_id]["extract"]
-    # 先頭に概要と記載
-    extract = "# 概要\n\n" + extract
-    # md形式の見出しに変換
-    extract = extract.replace("\n==== ", "### ")
-    extract = extract.replace("\n=== ", "## ")
-    extract = extract.replace("\n== ", "# ")
-    extract = extract.replace(" ====", "")
-    extract = extract.replace(" ===", "")
-    extract = extract.replace(" ==", "")
+# HTMLをマークダウンに変換
+markdown = html2text.html2text(html)
 
-    # テキストデータをdownloadフォルダに保存
-    dir = "./download"
-    if not os.path.exists(dir):
-        # 無かったら作成
-        os.makedirs(dir)
-    with open(dir + "/" + title +".md", "w", encoding="utf-8") as f:
-        f.write(extract)
+# 画像を含むリンクを削除
+markdown = re.sub(r'\[!\[.*?\]\(.*?\)\]\([^)]+\)', '', markdown, flags=re.DOTALL)
+
+# 通常の画像リンクを削除
+markdown = re.sub(r'!\[.*?\]\(.*?\)', '', markdown, flags=re.DOTALL)
+
+# 通常のリンクをテキスト化
+markdown = re.sub(r'\[([^\]]+)\]\([^)]+\)', r'\1', markdown, flags=re.DOTALL)
+
+# ファイル保存例
+dir = "./download"
+if not os.path.exists(dir):
+    # 無かったら作成
+    os.makedirs(dir)
+with open(dir + "/" + title +"_2.md", "w", encoding="utf-8") as f:
+    f.write(markdown)
+
+print(markdown)
