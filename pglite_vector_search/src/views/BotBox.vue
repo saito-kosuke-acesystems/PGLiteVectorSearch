@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted, ref, watch } from 'vue'
+import { computed, nextTick, onMounted, ref, watch } from 'vue'
 import { useChatStore } from '@/stores/chatMessage'
 import { MessageData } from '@/models/chatMessage'
 import ChatForm from '@/components/ChatForm.vue'
@@ -13,6 +13,16 @@ const messageList = computed((): Map<number, MessageData> => {
 })
 
 const initialized = ref(false);
+const containerRef = ref<HTMLElement | null>(null);
+
+const scrollToBottom = () => {
+    if (containerRef.value) {
+        const messagesContainer = containerRef.value.querySelector('.messages-container');
+        if (messagesContainer) {
+            messagesContainer.scrollTop = messagesContainer.scrollHeight;
+        }
+    }
+}
 
 // baseURL, chatModel, embeddingModelの編集用（localStorage対応）
 function loadConfigFromStorage() {
@@ -77,6 +87,14 @@ onMounted(() => {
     });
 })
 
+// メッセージリストの変更を監視して自動スクロール
+watch(messageList, () => {
+    // DOMの更新後にスクロールを実行するため、nextTickを使用
+    nextTick(() => {
+        scrollToBottom();
+    });
+}, { deep: true });
+
 // メッセージのフォーマット関数
 function formatMessage(msg: string): string {
     return msg.replace(/\n/g, '<br>');
@@ -84,7 +102,7 @@ function formatMessage(msg: string): string {
 </script>
 
 <template>
-    <div class="container">
+    <div class="container" ref="containerRef">
         <!-- 設定編集UIを追加 -->
         <div style="margin-bottom: 16px;">
             <label for="baseURL-input">ollama baseURL:</label>
@@ -95,44 +113,77 @@ function formatMessage(msg: string): string {
             <input id="embeddingModel-input" v-model="config.embeddingModel" style="width: 250px; margin-right: 8px;" />
             <button @click="updateConfig">反映</button>
             <button @click="resetConfig" style="margin-right: 8px;">デフォルトに戻す</button>
+        </div>        <div class="messages-container">
+            <template v-for="[id, message] in messageList" v-bind:key="id">
+                <div class="message-wrapper" :class="{ user: !message.isBot }">
+                    <div v-if="message.isBot" class="bot-message" v-html="formatMessage(message.message)"></div>
+                    <div v-else class="user-message">{{ message.message }}</div>
+                </div>
+            </template>
         </div>
-        <template v-for="[id, message] in messageList" v-bind:key="id">
-            <div v-if="message.isBot" class="bot-message" v-html="formatMessage(message.message)"></div>
-            <div v-else class="user-message">{{ message.message }}</div>
-        </template>
-        <ChatForm v-if="initialized"/>
+        <div class="form-container">
+            <ChatForm v-if="initialized"/>
+        </div>
     </div>
 </template>
 
 <style scoped>
+.message-wrapper {
+    width: 100%;
+    display: flex;
+    justify-content: flex-start;
+    margin: 10px 0;
+}
+
+.message-wrapper.user {
+    justify-content: flex-end;
+}
+
 .user-message {
     max-width: 80%;
-    width: auto;
-    margin: 10px;
     padding: 10px;
-    border-radius: 5px;
-    box-shadow: 0 2px 5px rgba(0, 0, 0, 0.3);
-    align-self: flex-end;
-    background-color: #2d81d8;
-    color: white;
+    border-radius: 15px;
+    border: 1px solid #ccc;
+    background-color: #e6f2ff;
+    margin-right: 20px;
 }
 
 .bot-message {
     max-width: 80%;
-    width: auto;
-    margin: 10px;
     padding: 10px;
-    border-radius: 5px;
-    box-shadow: 0 2px 5px rgba(0, 0, 0, 0.3);
-    align-self: flex-start;
-    background-color: #f2f2f2;
+    border-radius: 15px;
+    border: 1px solid #ccc;
+    background-color: #f8f9fa;
+    margin-left: 20px;
 }
 
 .container {
     flex: 1;
     padding: 20px;
-    padding-bottom: 70px !important;
     display: flex;
     flex-direction: column;
+    height: calc(100vh - 40px); /* ページのパディングを考慮 */
+    position: fixed;
+    top: 20px;
+    left: 20px;
+    right: 20px;
+    bottom: 20px;
+}
+
+/* メッセージリストを含む領域 */
+.messages-container {
+    flex: 1;
+    overflow-y: auto;
+    margin-bottom: 60px; /* ChatFormのための空間 */
+}
+
+/* フォーム領域を固定 */
+.form-container {
+    position: fixed;
+    bottom: 20px;
+    left: 20px;
+    right: 20px;
+    background-color: white;
+    padding: 10px 0;
 }
 </style>
