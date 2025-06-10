@@ -28,7 +28,9 @@ export async function* streamChatMessage(userMessage: string, memory: any[]): As
     try {
         if (!openai) throw new Error('OpenAIクライアントが初期化されていません');
         const systemPrompt = memory.length > 0
-            ? `以下の情報を参考にして、ユーザの質問に答えてください。\n${memory.map(m => m.content).join('\n')}`
+            ? `与えられた以下の情報のみを使用して、ユーザの質問に答えてください。
+            与えられた情報に基づかない推測や一般的な知識は使用せず、わからない場合は「その情報は与えられていません」と回答してください。
+            参考情報：\n${memory.map(m => m.content).join('\n')}`
             : 'ユーザの質問に答えてください。';
 
         const stream = await openai.chat.completions.create({
