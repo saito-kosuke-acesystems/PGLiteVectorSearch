@@ -36,6 +36,12 @@ function loadConfigFromStorage() {
 }
 const config = ref(loadConfigFromStorage())
 
+// サイドバーの開閉状態
+const sidebarOpen = ref(true)
+function toggleSidebar() {
+    sidebarOpen.value = !sidebarOpen.value
+}
+
 watch(config, (val) => {
     localStorage.setItem('openai_config', JSON.stringify(val))
 }, { deep: true })
@@ -102,32 +108,98 @@ function formatMessage(msg: string): string {
 </script>
 
 <template>
-    <div class="container" ref="containerRef">
-        <!-- 設定編集UIを追加 -->
-        <div style="margin-bottom: 16px;">
-            <label for="baseURL-input">ollama baseURL:</label>
-            <input id="baseURL-input" v-model="config.baseURL" style="width: 300px; margin-right: 8px;" />
-            <label for="chatModel-input">chatModel:</label>
-            <input id="chatModel-input" v-model="config.chatModel" style="width: 150px; margin-right: 8px;" />
-            <label for="embeddingModel-input">embeddingModel:</label>
-            <input id="embeddingModel-input" v-model="config.embeddingModel" style="width: 250px; margin-right: 8px;" />
-            <button @click="updateConfig">反映</button>
-            <button @click="resetConfig" style="margin-right: 8px;">デフォルトに戻す</button>
-        </div>        <div class="messages-container">
-            <template v-for="[id, message] in messageList" v-bind:key="id">
-                <div class="message-wrapper" :class="{ user: !message.isBot }">
-                    <div v-if="message.isBot" class="bot-message" v-html="formatMessage(message.message)"></div>
-                    <div v-else class="user-message">{{ message.message }}</div>
+    <div class="container">
+        <!-- サイドバー（設定UI） -->
+        <div class="sidebar" :class="{ closed: !sidebarOpen }">
+            <button class="sidebar-toggle" @click="toggleSidebar">
+                <span v-if="sidebarOpen">＜</span>
+                <span v-else>≡</span>
+            </button>
+            <template v-if="sidebarOpen">
+                <label for="baseURL-input">ollama baseURL:</label>
+                <input id="baseURL-input" v-model="config.baseURL" class="sidebar-input" />
+                <label for="chatModel-input">chatModel:</label>
+                <input id="chatModel-input" v-model="config.chatModel" class="sidebar-input" />
+                <label for="embeddingModel-input">embeddingModel:</label>
+                <input id="embeddingModel-input" v-model="config.embeddingModel" class="sidebar-input" />
+                <div style="margin-top: 8px;">
+                    <button @click="updateConfig" style="margin-right: 8px;">反映</button>
+                    <button @click="resetConfig">デフォルトに戻す</button>
                 </div>
             </template>
         </div>
-        <div class="form-container">
-            <ChatForm v-if="initialized"/>
+        <!-- メインコンテンツ（チャット） -->
+        <div class="main-content" ref="containerRef">
+            <div class="messages-container">
+                <template v-for="[id, message] in messageList" v-bind:key="id">
+                    <div class="message-wrapper" :class="{ user: !message.isBot }">
+                        <div v-if="message.isBot" class="bot-message" v-html="formatMessage(message.message)"></div>
+                        <div v-else class="user-message">{{ message.message }}</div>
+                    </div>
+                </template>
+            </div>
+            <div class="form-container">
+                <ChatForm v-if="initialized"/>
+            </div>
         </div>
     </div>
 </template>
 
 <style scoped>
+.container {
+    display: flex;
+    flex-direction: row;
+    height: calc(100vh - 40px);
+    position: fixed;
+    top: 0px;
+    left: 0px;
+    right: 0px;
+    bottom: 20px;
+    background: #fff;
+}
+.sidebar {
+    width: 270px;
+    min-width: 48px;
+    background: #f4f6fa;
+    border-right: 1px solid #ddd;
+    padding: 24px 16px 16px 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    box-sizing: border-box;
+    transition: width 0.2s;
+    position: relative;
+}
+.sidebar.closed {
+    width: 48px;
+    min-width: 48px;
+    padding: 16px 4px 16px 4px;
+    align-items: center;
+    overflow: hidden;
+}
+.sidebar-toggle {
+    position: absolute;
+    top: 8px;
+    right: 8px;
+    background: none;
+    border: none;
+    font-size: 20px;
+    cursor: pointer;
+    z-index: 2;
+    padding: 4px;
+}
+.sidebar.closed .sidebar-toggle {
+    right: 8px;
+    left: 8px;
+}
+.main-content {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    padding: 20px;
+    position: relative;
+    height: 100%;
+}
 .message-wrapper {
     width: 100%;
     display: flex;
@@ -157,19 +229,6 @@ function formatMessage(msg: string): string {
     margin-left: 20px;
 }
 
-.container {
-    flex: 1;
-    padding: 20px;
-    display: flex;
-    flex-direction: column;
-    height: calc(100vh - 40px); /* ページのパディングを考慮 */
-    position: fixed;
-    top: 20px;
-    left: 20px;
-    right: 20px;
-    bottom: 20px;
-}
-
 /* メッセージリストを含む領域 */
 .messages-container {
     flex: 1;
@@ -185,5 +244,18 @@ function formatMessage(msg: string): string {
     right: 20px;
     background-color: white;
     padding: 10px 0;
+}
+
+.sidebar-input {
+    width: 100%;
+    min-width: 0;
+    max-width: 100%;
+    box-sizing: border-box;
+    margin-bottom: 8px;
+    padding: 6px 8px;
+    border: 1px solid #ccc;
+    border-radius: 4px;
+    font-size: 15px;
+    background: #fff;
 }
 </style>

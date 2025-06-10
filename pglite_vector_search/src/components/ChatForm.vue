@@ -56,7 +56,7 @@ onUpdated((): void => {
 <style scoped>
 .input-text {
     flex: 1%;
-    border: none;
+    border: 2px solid #007bff;
     border-radius: 5px;
     padding: 10px;
     margin-right: 10px;
@@ -64,6 +64,13 @@ onUpdated((): void => {
     margin-bottom: 5px;
     font-size: 16px;
     height: 20px;
+    outline: none;
+    transition: border-color 0.2s;
+}
+
+.input-text:focus {
+    border-color: #0056b3;
+    background-color: #eaf4ff;
 }
 
 .send-form {
@@ -73,7 +80,7 @@ onUpdated((): void => {
     left: 0;
     right: 0;
     padding: 10px;
-    background-color: white;
+    background-color: #f8f9fa;
     box-shadow: 0 -1px 5px rgba(0, 0, 0, 0.3);
     z-index: 1;
     align-items: center;
@@ -93,14 +100,24 @@ onUpdated((): void => {
 
 .submit-btn {
     font-size: 20px;
-    padding: 4px 8px;
+    padding: 4px 16px;
     border-radius: 4px;
-    background: #f0f0f0;
-    border: 1px solid #ccc;
+    background: #007bff;
+    border: none;
+    color: white;
     transition: background 0.2s;
+    margin-right: 10px;
+    cursor: pointer;
+}
+.submit-btn:last-child {
+    background: #6c757d;
+}
+.submit-btn:disabled {
+    background: #b0b0b0;
+    cursor: not-allowed;
 }
 
 .file-upload-btn:hover {
-    background: #e0e0e0;
+    background: #0056b3;
 }
 </style>
