@@ -1,6 +1,6 @@
 import { defineStore } from 'pinia'
 import { MessageData, SendMessage, State } from '@/models/chatMessage'
-import { generateChatMessage, generateEmbedding } from '@/utils/openAI'
+import { streamChatMessage, generateEmbedding } from '@/utils/openAI'
 import { insertMemory, searchMemory } from '@/utils/pglite'
 import { chunkFile } from '@/utils/chunkFile'
 
@@ -36,20 +36,27 @@ export const useChatStore = defineStore(
                         return []
                     })
                 console.log('searchMemory result:', memory)
-                // 回答の生成
-                await generateChatMessage(question, memory)
-                    .then((response) => {
-                        const setId = this.messageList.size + 1
+                // 応答をストリーミング表示
+                const setId = this.messageList.size + 1
+                this.messageList.set(setId, {
+                    id: setId,
+                    message: '',
+                    isBot: true
+                })
+                try {
+                    for await (const chunk of streamChatMessage(question, memory)) {
+                        const prev = this.messageList.get(setId)?.message || ''
                         this.messageList.set(setId, {
                             id: setId,
-                            message: response,
+                            message: prev + chunk,
                             isBot: true
                         })
-                    })
-                    .catch((reason) => errorHandler(reason))
-                    .finally(() => {
-                        this.isLoading = false
-                    })
+                    }
+                } catch (reason) {
+                    errorHandler(reason)
+                } finally {
+                    this.isLoading = false
+                }
             },
             async uploadFile(file: File) {
                 try {

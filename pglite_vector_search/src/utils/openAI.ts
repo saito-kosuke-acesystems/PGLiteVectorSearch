@@ -24,26 +24,29 @@ setOpenAIConfig({
     embeddingModel: currentEmbeddingModel
 });
 
-export async function generateChatMessage(userMessage: string, memory: any[]): Promise<string> {
+export async function* streamChatMessage(userMessage: string, memory: any[]): AsyncGenerator<string> {
     try {
-        // システムプロンプト作成
+        if (!openai) throw new Error('OpenAIクライアントが初期化されていません');
         const systemPrompt = memory.length > 0
             ? `以下の情報を参考にして、ユーザの質問に答えてください。\n${memory.map(m => m.content).join('\n')}`
             : 'ユーザの質問に答えてください。';
 
-        if (!openai) throw new Error('OpenAIクライアントが初期化されていません');
-        const response = await openai.chat.completions.create({
+        const stream = await openai.chat.completions.create({
             model: currentChatModel,
             messages: [
                 { role: 'system', content: systemPrompt },
                 { role: 'user', content: userMessage }
-            ]
+            ],
+            stream: true
         });
 
-        return response.choices[0].message?.content || '';
+        for await (const chunk of stream) {
+            const content = chunk.choices?.[0]?.delta?.content;
+            if (content) yield content;
+        }
     } catch (error) {
-        console.error('Error generating chat message:', error);
-        return '';
+        console.error('Error streaming chat message:', error);
+        throw error;
     }
 }
 
@@ -59,7 +62,7 @@ export async function generateEmbedding(userMessage: string): Promise<number[]> 
         return response.data?.[0]?.embedding || [];
     } catch (error) {
         console.error('Error generating embedding:', error);
-        return [];
+        throw error;
     }
 }
 
