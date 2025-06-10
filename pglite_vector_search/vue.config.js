@@ -3,7 +3,7 @@ module.exports = defineConfig({
   transpileDependencies: true,
   outputDir: '../docs',
   assetsDir: 'assets',
-  publicPath: './',
+  publicPath: '/PGLiteVectorSearch/',
   configureWebpack: {
     devtool: "source-map"
   }
