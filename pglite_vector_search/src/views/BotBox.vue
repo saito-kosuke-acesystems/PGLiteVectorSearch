@@ -1,10 +1,10 @@
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue'
+import { computed, onMounted, ref, watch } from 'vue'
 import { useChatStore } from '@/stores/chatMessage'
 import { MessageData } from '@/models/chatMessage'
 import ChatForm from '@/components/ChatForm.vue'
 import { initMemory } from '@/utils/pglite'
-import { getDimension } from '@/utils/openAI'
+import { getDimension, getCurrentConfig, setOpenAIConfig } from '@/utils/openAI'
 //import { generateEmbedding } from '@/utils/openAI'
 
 const chatStore = useChatStore()
@@ -14,8 +14,52 @@ const messageList = computed((): Map<number, MessageData> => {
 
 const initialized = ref(false);
 
+// baseURL, chatModel, embeddingModelの編集用（localStorage対応）
+function loadConfigFromStorage() {
+    const saved = localStorage.getItem('openai_config')
+    if (saved) {
+        try {
+            return JSON.parse(saved)
+        } catch { /* ignore */ }
+    }
+    return getCurrentConfig()
+}
+const config = ref(loadConfigFromStorage())
+
+watch(config, (val) => {
+    localStorage.setItem('openai_config', JSON.stringify(val))
+}, { deep: true })
+
+function updateConfig() {
+    setOpenAIConfig({
+        baseURL: config.value.baseURL,
+        chatModel: config.value.chatModel,
+        embeddingModel: config.value.embeddingModel
+    })
+    localStorage.setItem('openai_config', JSON.stringify(config.value))
+    window.alert('設定を更新しました')
+    window.location.reload()
+}
+
+// openAI.tsのデフォルト値を取得するための定数
+const defaultConfig = getCurrentConfig();
+
+function resetConfig() {
+    config.value = { ...defaultConfig };
+    setOpenAIConfig(defaultConfig);
+    localStorage.setItem('openai_config', JSON.stringify(defaultConfig));
+    window.alert('デフォルト設定に戻しました');
+    window.location.reload();
+}
+
 // 初期化処理
 onMounted(() => {
+    // 設定を反映
+    setOpenAIConfig({
+        baseURL: config.value.baseURL,
+        chatModel: config.value.chatModel,
+        embeddingModel: config.value.embeddingModel
+    })
     // embeddingModelの次元数を取得
     getDimension().then((dimension) => {
         console.log('Embedding dimension:', dimension);
@@ -41,6 +85,17 @@ function formatMessage(msg: string): string {
 
 <template>
     <div class="container">
+        <!-- 設定編集UIを追加 -->
+        <div style="margin-bottom: 16px;">
+            <label for="baseURL-input">ollama baseURL:</label>
+            <input id="baseURL-input" v-model="config.baseURL" style="width: 300px; margin-right: 8px;" />
+            <label for="chatModel-input">chatModel:</label>
+            <input id="chatModel-input" v-model="config.chatModel" style="width: 150px; margin-right: 8px;" />
+            <label for="embeddingModel-input">embeddingModel:</label>
+            <input id="embeddingModel-input" v-model="config.embeddingModel" style="width: 250px; margin-right: 8px;" />
+            <button @click="updateConfig">反映</button>
+            <button @click="resetConfig" style="margin-right: 8px;">デフォルトに戻す</button>
+        </div>
         <template v-for="[id, message] in messageList" v-bind:key="id">
             <div v-if="message.isBot" class="bot-message" v-html="formatMessage(message.message)"></div>
             <div v-else class="user-message">{{ message.message }}</div>
