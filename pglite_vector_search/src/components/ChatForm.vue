@@ -45,23 +45,21 @@ onUpdated((): void => {
 <template>
     <form v-on:submit.prevent="onSendMessage" class="send-form">
         <label class="file-upload-label">
-        <input ref="fileInputRef" type="file" @change="onFileChange" class="file-input" style="display:none" />
-        <button type="button" @click="onFileButtonClick" :disabled="isLoading" class="submit-btn">RAG追加</button>
+            <input ref="fileInputRef" type="file" @change="onFileChange" class="file-input" style="display:none" />
+            <button type="button" @click="onFileButtonClick" :disabled="isLoading" class="submit-btn">RAG追加</button>
         </label>
         <input type="text" id="sendMessage" v-model="sendMessage" required class="input-text" />
-        <button type="submit" v-bind:disabled="isLoading" class="submit-btn" >送信</button>
+        <button type="submit" v-bind:disabled="isLoading" class="submit-btn">送信</button>
     </form>
 </template>
 
 <style scoped>
 .input-text {
-    flex: 1%;
+    flex: 1;
     border: 2px solid #007bff;
     border-radius: 5px;
     padding: 10px;
     margin-right: 10px;
-    margin-top: 5px;
-    margin-bottom: 5px;
     font-size: 16px;
     height: 20px;
     outline: none;
@@ -75,15 +73,12 @@ onUpdated((): void => {
 
 .send-form {
     display: flex;
-    position: fixed;
-    bottom: 0;
-    left: 0;
-    right: 0;
-    padding: 10px;
-    background-color: #f8f9fa;
-    box-shadow: 0 -1px 5px rgba(0, 0, 0, 0.3);
+    width: 100%;
+    padding: 0;
+    background-color: transparent;
     z-index: 1;
     align-items: center;
+    box-sizing: border-box;
 }
 
 .file-upload-label {
@@ -99,8 +94,8 @@ onUpdated((): void => {
 }
 
 .submit-btn {
-    font-size: 20px;
-    padding: 4px 16px;
+    font-size: 16px;
+    padding: 8px 16px;
     border-radius: 4px;
     background: #007bff;
     border: none;
@@ -110,7 +105,8 @@ onUpdated((): void => {
     cursor: pointer;
 }
 .submit-btn:last-child {
-    background: #6c757d;
+    background: #28a745;
+    margin-right: 0;
 }
 .submit-btn:disabled {
     background: #b0b0b0;

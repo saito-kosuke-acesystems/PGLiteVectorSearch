@@ -114,21 +114,16 @@ function formatMessage(msg: string): string {
             <button class="sidebar-toggle" @click="toggleSidebar">
                 <span v-if="sidebarOpen">＜</span>
                 <span v-else>≡</span>
-            </button>
-            <template v-if="sidebarOpen">
-                <label for="baseURL-input">ollama baseURL:</label>
+            </button>            <template v-if="sidebarOpen">
+                <label for="baseURL-input" class="sidebar-label">ollama baseURL:</label>
                 <input id="baseURL-input" v-model="config.baseURL" class="sidebar-input" />
-                <label for="chatModel-input">chatModel:</label>
-                <input id="chatModel-input" v-model="config.chatModel" class="sidebar-input" />
-                <label for="embeddingModel-input">embeddingModel:</label>
-                <input id="embeddingModel-input" v-model="config.embeddingModel" class="sidebar-input" />
-                <div style="margin-top: 8px;">
-                    <button @click="updateConfig" style="margin-right: 8px;">反映</button>
-                    <button @click="resetConfig">デフォルトに戻す</button>
+                <label for="chatModel-input" class="sidebar-label">chatModel:</label>
+                <input id="chatModel-input" v-model="config.chatModel" class="sidebar-input" />                <label for="embeddingModel-input" class="sidebar-label">embeddingModel:</label>                  <input id="embeddingModel-input" v-model="config.embeddingModel" class="sidebar-input" />
+                <div style="margin-top: 8px; display: flex; justify-content: space-between;">
+                    <button @click="resetConfig" class="config-btn reset-btn" title="デフォルト設定に戻します">リセット</button>
+                    <button @click="updateConfig" class="config-btn" title="設定を適用します">適用</button>
                 </div>
-            </template>
-        </div>
-        <!-- メインコンテンツ（チャット） -->
+            </template>        </div>        <!-- メインコンテンツ（チャット） -->
         <div class="main-content" ref="containerRef">
             <div class="messages-container">
                 <template v-for="[id, message] in messageList" v-bind:key="id">
@@ -138,8 +133,10 @@ function formatMessage(msg: string): string {
                     </div>
                 </template>
             </div>
-            <div class="form-container">
-                <ChatForm v-if="initialized"/>
+            
+            <!-- チャットフォーム（画面下部） -->
+            <div class="chat-form-bottom" v-if="initialized">
+                <ChatForm />
             </div>
         </div>
     </div>
@@ -149,18 +146,21 @@ function formatMessage(msg: string): string {
 .container {
     display: flex;
     flex-direction: row;
-    height: calc(100vh - 40px);
+    height: 100vh;
     position: fixed;
-    top: 0px;
-    left: 0px;
-    right: 0px;
-    bottom: 20px;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
     background: #fff;
+    margin: 0;
+    padding: 0;
+    overflow: hidden;
 }
 .sidebar {
     width: 270px;
     min-width: 48px;
-    background: #f4f6fa;
+    background: #f8f9fa;
     border-right: 1px solid #ddd;
     padding: 24px 16px 16px 16px;
     display: flex;
@@ -169,6 +169,8 @@ function formatMessage(msg: string): string {
     box-sizing: border-box;
     transition: width 0.2s;
     position: relative;
+    height: 100%;
+    margin: 0;
 }
 .sidebar.closed {
     width: 48px;
@@ -181,13 +183,24 @@ function formatMessage(msg: string): string {
     position: absolute;
     top: 8px;
     right: 8px;
-    background: none;
+    background: #28a745;
     border: none;
-    font-size: 20px;
+    color: white;
+    font-size: 16px;
     cursor: pointer;
     z-index: 2;
-    padding: 4px;
+    padding: 4px 8px;
+    border-radius: 4px;
+    transition: background 0.2s;
+    height: 39px; /* チャットフォームのボタンと同じ高さに設定 */
+    line-height: 1.2;
+    box-sizing: border-box;
 }
+
+.sidebar-toggle:hover {
+    background: #218838;
+}
+
 .sidebar.closed .sidebar-toggle {
     right: 8px;
     left: 8px;
@@ -196,9 +209,19 @@ function formatMessage(msg: string): string {
     flex: 1;
     display: flex;
     flex-direction: column;
-    padding: 20px;
     position: relative;
     height: 100%;
+    padding: 0;
+    margin: 0;
+    overflow: hidden;
+}
+.chat-form-bottom {
+    border-top: 1px solid #ddd;
+    background: #f8f9fa;
+    padding: 16px 20px;
+    margin: 0;
+    width: 100%;
+    box-sizing: border-box;
 }
 .message-wrapper {
     width: 100%;
@@ -233,18 +256,12 @@ function formatMessage(msg: string): string {
 .messages-container {
     flex: 1;
     overflow-y: auto;
-    margin-bottom: 60px; /* ChatFormのための空間 */
+    padding: 20px;
+    box-sizing: border-box;
+    margin: 0;
 }
 
-/* フォーム領域を固定 */
-.form-container {
-    position: fixed;
-    bottom: 20px;
-    left: 20px;
-    right: 20px;
-    background-color: white;
-    padding: 10px 0;
-}
+/* フォーム領域のスタイルは不要になったため削除 */
 
 .sidebar-input {
     width: 100%;
@@ -252,10 +269,55 @@ function formatMessage(msg: string): string {
     max-width: 100%;
     box-sizing: border-box;
     margin-bottom: 8px;
-    padding: 6px 8px;
-    border: 1px solid #ccc;
-    border-radius: 4px;
+    padding: 10px;
+    border: 2px solid #007bff;
+    border-radius: 5px;
     font-size: 15px;
     background: #fff;
+    outline: none;
+    transition: border-color 0.2s;
+}
+
+.sidebar-input:focus {
+    border-color: #0056b3;
+    background-color: #eaf4ff;
+}
+
+.config-btn {
+    font-size: 16px;
+    padding: 8px 12px;
+    border-radius: 4px;
+    background: #28a745;
+    border: none;
+    color: white;
+    transition: background 0.2s;
+    cursor: pointer;
+    flex: 1;
+    margin: 0 5px;
+    height: 39px; /* チャットフォームのボタンと同じ高さに設定 */
+    line-height: 1.2;
+    box-sizing: border-box;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.reset-btn {
+    background: #6c757d;
+}
+
+.config-btn:hover {
+    background: #218838;
+}
+
+.reset-btn:hover {
+    background: #5a6268;
+}
+
+.sidebar-label {
+    margin-bottom: 4px;
+    font-size: 15px;
+    color: #333;
+    font-weight: 500;
 }
 </style>
