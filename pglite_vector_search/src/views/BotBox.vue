@@ -127,7 +127,8 @@ function formatMessage(msg: string): string {
                     <button @click="updateConfig" class="config-btn" title="設定を適用します">適用</button>
                 </div>
             </template>
-        </div> <!-- メインコンテンツ（チャット） -->
+        </div>
+        <!-- メインコンテンツ（チャット） -->
         <div class="main-content" ref="containerRef">
             <div class="messages-container">
                 <template v-for="[id, message] in messageList" v-bind:key="id">
@@ -137,7 +138,6 @@ function formatMessage(msg: string): string {
                     </div>
                 </template>
             </div>
-
             <!-- チャットフォーム（画面下部） -->
             <div class="chat-form-bottom" v-if="initialized">
                 <ChatForm />
@@ -146,5 +146,4 @@ function formatMessage(msg: string): string {
     </div>
 </template>
 
-<style>
-</style>
+<style></style>

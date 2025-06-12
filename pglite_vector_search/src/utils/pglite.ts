@@ -50,3 +50,52 @@ export async function searchMemory(embedding: number[], limit: number = 3): Prom
   return result.rows;
 }
 
+// ハイブリッド検索（β）
+export async function hybridSearchMemory(keywords: string | string[], embedding: number[], limit: number = 3): Promise<any[]> {
+  const vec = JSON.stringify(embedding);
+  const threshold = 0.3;  // 距離の閾値
+  const vectorWeight = 0.7; // ベクトル検索の重み（0.0〜1.0）
+  const keywordWeight = 0.3; // キーワード検索の重み
+
+  // キーワードの処理
+  let keywordCondition = "";
+  if (Array.isArray(keywords)) {
+    // 空の配列または空文字のみの配列の場合は特殊処理
+    if (keywords.length === 0 || keywords.every(k => k.trim() === '')) {
+      // キーワードがない場合はベクトル検索のみを実行
+      return searchMemory(embedding, limit);
+    }
+    
+    // 配列の場合は各キーワードをエスケープして OR 条件で結合
+    const safeKeywords = keywords
+      .filter(k => k.trim() !== '')
+      .map(k => `content ILIKE '%${k.replace(/'/g, "''")}%'`);
+    
+    keywordCondition = safeKeywords.join(' OR ');
+  } else {
+    // 文字列の場合はそのままエスケープ
+    const safeKeyword = keywords.replace(/'/g, "''").trim();
+    if (safeKeyword === '') {
+      // キーワードが空の場合はベクトル検索のみを実行
+      return searchMemory(embedding, limit);
+    }
+    keywordCondition = `content ILIKE '%${safeKeyword}%'`;
+  }
+
+  const result = await pglite.query(`
+    SELECT 
+      id, 
+      content,
+      CASE
+        WHEN ${keywordCondition} THEN ${keywordWeight}
+        ELSE 0
+      END + 
+      (${vectorWeight} * (1 - (embedding <=> '${vec}'))) AS combined_score
+    FROM memory
+    WHERE ${keywordCondition} OR (embedding <=> '${vec}') < ${threshold}
+    ORDER BY combined_score DESC
+    LIMIT ${limit};
+  `);
+  return result.rows;
+}
+

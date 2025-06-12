@@ -1,8 +1,9 @@
 import { defineStore } from 'pinia'
 import { MessageData, SendMessage, State } from '@/models/chatMessage'
 import { streamChatMessage, generateEmbedding } from '@/utils/openAI'
-import { insertMemory, searchMemory } from '@/utils/pglite'
+import { insertMemory, searchMemory, hybridSearchMemory } from '@/utils/pglite'
 import { chunkFile } from '@/utils/chunkFile'
+import { extractKeywords } from '@/utils/segment'
 
 export const useChatStore = defineStore(
     'chat',
@@ -24,13 +25,17 @@ export const useChatStore = defineStore(
             },
             // ボットから回答を受けメッセージを追加
             async getBotReply(question: string) {
-                // 質問をベクトル化し、メモリから関連する情報を取得
+                // 質問をセグメント化し、キーワードを抽出
+                const keywords = extractKeywords(question)
+                console.log('Extracted keywords:', keywords)
+                // 質問をベクトル化
                 const vectorQuestion = await generateEmbedding(question)
                     .catch((reason) => {
                         errorHandler(reason)
                         return []
                     })
-                const memory = await searchMemory(vectorQuestion)
+                // 参考情報を取得
+                const memory = await hybridSearchMemory(keywords, vectorQuestion)
                     .catch((reason) => {
                         errorHandler(reason)
                         return []
