@@ -39,7 +39,7 @@ export async function insertMemory(content: string, embedding: number[]) {
     `INSERT INTO memory (content, embedding) VALUES ('${safeContent}', '${safeVec}')`);
 }
 
-export async function searchMemory(embedding: number[], limit: number = 2): Promise<any[]> {
+export async function searchMemory(embedding: number[], limit: number = 5): Promise<any[]> {
   const vec = JSON.stringify(embedding);
   const threshold = 0.3;  // 距離の閾値
   const result = await pglite.query(`
@@ -52,13 +52,12 @@ export async function searchMemory(embedding: number[], limit: number = 2): Prom
 }
 
 // ハイブリッド検索（β）
-export async function hybridSearchMemory(keywords: string | string[], embedding: number[], limit: number = 2): Promise<any[]> {
+export async function hybridSearchMemory(keywords: string | string[], embedding: number[], limit: number = 5): Promise<any[]> {
   const vec = JSON.stringify(embedding);
   const vectorWeight = 0.5; // ベクトル検索の重み
   const keywordWeight = 0.4; // キーワード検索の重み
   const maxKeywordScore = 1.0; // キーワードスコアの最大値
-  const minCombinedScore = 0.4; // 最小結合スコア
-
+  const minCombinedScore = 0.3; // 最小結合スコア
   // キーワードの処理
   let keywordConditions = [];
   let keywordScoreExpression = "";
@@ -69,14 +68,13 @@ export async function hybridSearchMemory(keywords: string | string[], embedding:
     if (keywords.length === 0 || keywords.every(k => k.trim() === '')) {
       return searchMemory(embedding, limit);
     }
+      // 有効なキーワードのみをフィルタリングし、重複を除去
+    const validKeywords = Array.from(new Set(keywords.filter(k => k.trim() !== '').map(k => k.trim().toLowerCase())));
     
-    // 有効なキーワードのみをフィルタリング
-    const validKeywords = keywords.filter(k => k.trim() !== '');
-    
-    // 各キーワードの出現回数をカウントする式を作成
+    // 各キーワードの存在をチェックする式を作成（0または1の値）
     keywordConditions = validKeywords.map(k => {
       const safeKeyword = k.replace(/'/g, "''");
-      return `(LENGTH(content) - LENGTH(REPLACE(LOWER(content), LOWER('${safeKeyword}'), ''))) / LENGTH('${safeKeyword}')`;
+      return `CASE WHEN LOWER(content) LIKE '%${safeKeyword}%' THEN 1 ELSE 0 END`;
     });
     
     if (keywordConditions.length === 0) {
@@ -89,21 +87,20 @@ export async function hybridSearchMemory(keywords: string | string[], embedding:
     );
     keywordCondition = whereConditions.join(' OR ');
     
-    // キーワードスコア計算式（出現回数の合計に基づく）
+    // キーワードスコア計算式（マッチしたキーワード数に基づく、重複なし）
     keywordScoreExpression = `LEAST((${keywordConditions.join(' + ')}) * ${keywordWeight} / ${validKeywords.length}, ${maxKeywordScore})`;
   } else {
     // 文字列の場合
-    const safeKeyword = keywords.replace(/'/g, "''").trim();
+    const safeKeyword = keywords.replace(/'/g, "''").trim().toLowerCase();
     if (safeKeyword === '') {
       return searchMemory(embedding, limit);
     }
     
     keywordCondition = `content ILIKE '%${safeKeyword}%'`;
     
-    // 出現回数に基づくスコア計算
-    keywordScoreExpression = `LEAST((LENGTH(content) - LENGTH(REPLACE(LOWER(content), LOWER('${safeKeyword}'), ''))) / LENGTH('${safeKeyword}') * ${keywordWeight}, ${maxKeywordScore})`;
+    // 存在ベースのスコア計算（0または1）
+    keywordScoreExpression = `CASE WHEN LOWER(content) LIKE '%${safeKeyword}%' THEN ${keywordWeight} ELSE 0 END`;
   }
-
   // スコア計算式を変数として定義
   const combinedScoreExpression = `
     CASE
@@ -118,10 +115,11 @@ export async function hybridSearchMemory(keywords: string | string[], embedding:
       SELECT 
         id, 
         content,
+        (embedding <=> '${vec}') AS vector_distance,
         ${combinedScoreExpression} AS combined_score
       FROM memory
     )
-    SELECT id, content, combined_score
+    SELECT id, content, vector_distance, combined_score
     FROM scored_results
     WHERE combined_score >= ${minCombinedScore}
     ORDER BY combined_score DESC
