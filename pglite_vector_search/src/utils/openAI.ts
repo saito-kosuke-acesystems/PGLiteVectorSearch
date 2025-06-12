@@ -24,12 +24,40 @@ setOpenAIConfig({
     embeddingModel: currentEmbeddingModel
 });
 
+export async function generateKeyWord(userMessage: string): Promise<string> {
+    try {
+        if (!openai) throw new Error('OpenAIクライアントが初期化されていません');
+
+        const systemPrompt = `ユーザの質問に含まれるキーワードを以下のルールで抽出してください。余分な説明は含めないでください。
+        ・キーワードをダブルクォーテーション（"）で囲む
+        ・キーワードはカンマ（,）で区切る
+        ・キーワードは2文字以上の単語であること
+        例: "キーワード1","キーワード2","キーワード3"`;
+
+        const response = await openai.chat.completions.create({
+            model: currentChatModel,
+            messages: [
+                {
+                    role: 'system',
+                    content: systemPrompt
+                },
+                { role: 'user', content: userMessage }
+            ]
+        });
+
+        const content = response.choices?.[0]?.message?.content;
+        return content || '';
+    } catch (error) {
+        console.error('Error generating keyword:', error);
+        throw error;
+    }
+}
+
 export async function* streamChatMessage(userMessage: string, memory: any[]): AsyncGenerator<string> {
     try {
         if (!openai) throw new Error('OpenAIクライアントが初期化されていません');
         const systemPrompt = memory.length > 0
             ? `与えられた以下の情報のみを使用して、ユーザの質問に答えてください。
-            与えられた情報に基づかない推測や一般的な知識は使用せず、わからない場合は「その情報は与えられていません」と回答してください。
             参考情報：\n${memory.map(m => m.content).join('\n')}`
             : 'ユーザの質問に答えてください。';
 
@@ -39,7 +67,9 @@ export async function* streamChatMessage(userMessage: string, memory: any[]): As
                 { role: 'system', content: systemPrompt },
                 { role: 'user', content: userMessage }
             ],
-            stream: true
+            stream: true,
+            temperature: 0.0,    // 低い値で決定論的な応答に
+            top_p: 0.7,          // 出力の多様性を制限
         });
 
         for await (const chunk of stream) {

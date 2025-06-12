@@ -1,6 +1,6 @@
 import { defineStore } from 'pinia'
 import { MessageData, SendMessage, State } from '@/models/chatMessage'
-import { streamChatMessage, generateEmbedding } from '@/utils/openAI'
+import { generateKeyWord, streamChatMessage, generateEmbedding } from '@/utils/openAI'
 import { insertMemory, searchMemory, hybridSearchMemory } from '@/utils/pglite'
 import { chunkFile } from '@/utils/chunkFile'
 import { extractKeywords } from '@/utils/segment'
@@ -26,8 +26,12 @@ export const useChatStore = defineStore(
             // ボットから回答を受けメッセージを追加
             async getBotReply(question: string) {
                 // 質問をセグメント化し、キーワードを抽出
-                const keywords = extractKeywords(question)
-                console.log('Extracted keywords:', keywords)
+                // const keywords = extractKeywords(question)
+                // console.log('Extracted keywords:', keywords)
+                const keywordsCSV = await generateKeyWord(question)
+                console.log('Generated keywords:', keywordsCSV)
+                // キーワードをカンマ区切りで分割
+                const keywords = keywordsCSV.split(',').map(k => k.trim().replace(/^"|"$/g, ''))
                 // 質問をベクトル化
                 const vectorQuestion = await generateEmbedding(question)
                     .catch((reason) => {
