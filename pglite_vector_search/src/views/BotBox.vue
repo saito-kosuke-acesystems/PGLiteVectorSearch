@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import '@/assets/main.css'
 import { computed, nextTick, onMounted, ref, watch } from 'vue'
 import { useChatStore } from '@/stores/chatMessage'
 import { MessageData } from '@/models/chatMessage'
@@ -114,16 +115,19 @@ function formatMessage(msg: string): string {
             <button class="sidebar-toggle" @click="toggleSidebar">
                 <span v-if="sidebarOpen">＜</span>
                 <span v-else>≡</span>
-            </button>            <template v-if="sidebarOpen">
+            </button> <template v-if="sidebarOpen">
                 <label for="baseURL-input" class="sidebar-label">ollama baseURL:</label>
                 <input id="baseURL-input" v-model="config.baseURL" class="sidebar-input" />
                 <label for="chatModel-input" class="sidebar-label">chatModel:</label>
-                <input id="chatModel-input" v-model="config.chatModel" class="sidebar-input" />                <label for="embeddingModel-input" class="sidebar-label">embeddingModel:</label>                  <input id="embeddingModel-input" v-model="config.embeddingModel" class="sidebar-input" />
+                <input id="chatModel-input" v-model="config.chatModel" class="sidebar-input" /> <label
+                    for="embeddingModel-input" class="sidebar-label">embeddingModel:</label> <input
+                    id="embeddingModel-input" v-model="config.embeddingModel" class="sidebar-input" />
                 <div style="margin-top: 8px; display: flex; justify-content: space-between;">
                     <button @click="resetConfig" class="config-btn reset-btn" title="デフォルト設定に戻します">リセット</button>
                     <button @click="updateConfig" class="config-btn" title="設定を適用します">適用</button>
                 </div>
-            </template>        </div>        <!-- メインコンテンツ（チャット） -->
+            </template>
+        </div> <!-- メインコンテンツ（チャット） -->
         <div class="main-content" ref="containerRef">
             <div class="messages-container">
                 <template v-for="[id, message] in messageList" v-bind:key="id">
@@ -133,7 +137,7 @@ function formatMessage(msg: string): string {
                     </div>
                 </template>
             </div>
-            
+
             <!-- チャットフォーム（画面下部） -->
             <div class="chat-form-bottom" v-if="initialized">
                 <ChatForm />
@@ -142,182 +146,5 @@ function formatMessage(msg: string): string {
     </div>
 </template>
 
-<style scoped>
-.container {
-    display: flex;
-    flex-direction: row;
-    height: 100vh;
-    position: fixed;
-    top: 0;
-    left: 0;
-    right: 0;
-    bottom: 0;
-    background: #fff;
-    margin: 0;
-    padding: 0;
-    overflow: hidden;
-}
-.sidebar {
-    width: 270px;
-    min-width: 48px;
-    background: #f8f9fa;
-    border-right: 1px solid #ddd;
-    padding: 24px 16px 16px 16px;
-    display: flex;
-    flex-direction: column;
-    gap: 8px;
-    box-sizing: border-box;
-    transition: width 0.2s;
-    position: relative;
-    height: 100%;
-    margin: 0;
-}
-.sidebar.closed {
-    width: 48px;
-    min-width: 48px;
-    padding: 16px 4px 16px 4px;
-    align-items: center;
-    overflow: hidden;
-}
-.sidebar-toggle {
-    position: absolute;
-    top: 8px;
-    right: 8px;
-    background: #28a745;
-    border: none;
-    color: white;
-    font-size: 16px;
-    cursor: pointer;
-    z-index: 2;
-    padding: 4px 8px;
-    border-radius: 4px;
-    transition: background 0.2s;
-    height: 39px; /* チャットフォームのボタンと同じ高さに設定 */
-    line-height: 1.2;
-    box-sizing: border-box;
-}
-
-.sidebar-toggle:hover {
-    background: #218838;
-}
-
-.sidebar.closed .sidebar-toggle {
-    right: 8px;
-    left: 8px;
-}
-.main-content {
-    flex: 1;
-    display: flex;
-    flex-direction: column;
-    position: relative;
-    height: 100%;
-    padding: 0;
-    margin: 0;
-    overflow: hidden;
-}
-.chat-form-bottom {
-    border-top: 1px solid #ddd;
-    background: #f8f9fa;
-    padding: 16px 20px;
-    margin: 0;
-    width: 100%;
-    box-sizing: border-box;
-}
-.message-wrapper {
-    width: 100%;
-    display: flex;
-    justify-content: flex-start;
-    margin: 10px 0;
-}
-
-.message-wrapper.user {
-    justify-content: flex-end;
-}
-
-.user-message {
-    max-width: 80%;
-    padding: 10px;
-    border-radius: 15px;
-    border: 1px solid #ccc;
-    background-color: #e6f2ff;
-    margin-right: 20px;
-}
-
-.bot-message {
-    max-width: 80%;
-    padding: 10px;
-    border-radius: 15px;
-    border: 1px solid #ccc;
-    background-color: #f8f9fa;
-    margin-left: 20px;
-}
-
-/* メッセージリストを含む領域 */
-.messages-container {
-    flex: 1;
-    overflow-y: auto;
-    padding: 20px;
-    box-sizing: border-box;
-    margin: 0;
-}
-
-/* フォーム領域のスタイルは不要になったため削除 */
-
-.sidebar-input {
-    width: 100%;
-    min-width: 0;
-    max-width: 100%;
-    box-sizing: border-box;
-    margin-bottom: 8px;
-    padding: 10px;
-    border: 2px solid #007bff;
-    border-radius: 5px;
-    font-size: 15px;
-    background: #fff;
-    outline: none;
-    transition: border-color 0.2s;
-}
-
-.sidebar-input:focus {
-    border-color: #0056b3;
-    background-color: #eaf4ff;
-}
-
-.config-btn {
-    font-size: 16px;
-    padding: 8px 12px;
-    border-radius: 4px;
-    background: #28a745;
-    border: none;
-    color: white;
-    transition: background 0.2s;
-    cursor: pointer;
-    flex: 1;
-    margin: 0 5px;
-    height: 39px; /* チャットフォームのボタンと同じ高さに設定 */
-    line-height: 1.2;
-    box-sizing: border-box;
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
-}
-
-.reset-btn {
-    background: #6c757d;
-}
-
-.config-btn:hover {
-    background: #218838;
-}
-
-.reset-btn:hover {
-    background: #5a6268;
-}
-
-.sidebar-label {
-    margin-bottom: 4px;
-    font-size: 15px;
-    color: #333;
-    font-weight: 500;
-}
+<style>
 </style>

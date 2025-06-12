@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import '@/assets/main.css'
 import { ref, computed, onUpdated } from 'vue'
 import { useChatStore } from '@/stores/chatMessage'
 
@@ -53,67 +54,5 @@ onUpdated((): void => {
     </form>
 </template>
 
-<style scoped>
-.input-text {
-    flex: 1;
-    border: 2px solid #007bff;
-    border-radius: 5px;
-    padding: 10px;
-    margin-right: 10px;
-    font-size: 16px;
-    height: 20px;
-    outline: none;
-    transition: border-color 0.2s;
-}
-
-.input-text:focus {
-    border-color: #0056b3;
-    background-color: #eaf4ff;
-}
-
-.send-form {
-    display: flex;
-    width: 100%;
-    padding: 0;
-    background-color: transparent;
-    z-index: 1;
-    align-items: center;
-    box-sizing: border-box;
-}
-
-.file-upload-label {
-    display: flex;
-    align-items: center;
-    margin-right: 10px;
-    cursor: pointer;
-    position: relative;
-}
-
-.file-input {
-    display: none;
-}
-
-.submit-btn {
-    font-size: 16px;
-    padding: 8px 16px;
-    border-radius: 4px;
-    background: #007bff;
-    border: none;
-    color: white;
-    transition: background 0.2s;
-    margin-right: 10px;
-    cursor: pointer;
-}
-.submit-btn:last-child {
-    background: #28a745;
-    margin-right: 0;
-}
-.submit-btn:disabled {
-    background: #b0b0b0;
-    cursor: not-allowed;
-}
-
-.file-upload-btn:hover {
-    background: #0056b3;
-}
+<style>
 </style>
