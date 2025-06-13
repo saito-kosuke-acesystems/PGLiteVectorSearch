@@ -69,10 +69,11 @@ export async function generateKeyWord(userMessage: string, systemPrompt: string)
     }
 }
 
-export async function* streamChatMessage(userMessage: string, memory: any[], systemPrompt: string): AsyncGenerator<string> {
+export async function* streamChatMessage(userMessage: string, memory: any[], systemPrompt: string, chatHistory: any[] = []): AsyncGenerator<string> {
     try {
         const messages: ChatMessage[] = [
             { role: 'system', content: systemPrompt },
+            ...chatHistory,
             { role: 'user', content: userMessage }
         ];
 

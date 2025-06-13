@@ -75,20 +75,34 @@ export async function generateKeyWord(userMessage: string): Promise<string> {
     }
 }
 
-export async function* streamChatMessage(userMessage: string, memory: any[]): AsyncGenerator<string> {
+export async function* streamChatMessage(userMessage: string, memory: any[], chatHistory: any[] = []): AsyncGenerator<string> {
     try {
         if (!openai) throw new Error('OpenAIクライアントが初期化されていません');
-        const systemPrompt = memory.length > 0
-            ? `与えられた参考情報のみを使用して、ユーザの質問に答えてください。
+        
+        // チャット履歴を考慮したシステムプロンプト
+        let systemPrompt = '';
+        if (memory.length > 0) {
+            systemPrompt = `与えられた参考情報を使用してユーザの質問に答えてください。
             ・質問と直接一致する情報がない場合でも、質問の意図や類似した概念に関連する情報を探して回答してください。
             ・回答に推測や仮定を含めないでください。
+            ・過去の会話履歴がある場合は、その内容を考慮して文脈に沿った適切な回答をしてください。
             ・参考情報はすでに関連性が高い順に並べられています。
-            参考情報：\n${memory.map(m => m.content).join('\n')}`
-            : 'ユーザの質問に答えてください。';
+            
+            参考情報：\n${memory.map(m => m.content).join('\n')}`;
+        } else {
+            systemPrompt = 'ユーザの質問に答えてください。';
+        }
+
+        // メッセージ履歴を構築（システム→履歴→現在の質問の順）
+        const messages = [
+            { role: 'system', content: systemPrompt },
+            ...chatHistory,
+            { role: 'user', content: userMessage }
+        ];
 
         if (useOllamaAPI) {
             // Ollama APIを使用
-            for await (const chunk of ollamaStreamChatMessage(userMessage, memory, systemPrompt)) {
+            for await (const chunk of ollamaStreamChatMessage(userMessage, memory, systemPrompt, chatHistory)) {
                 yield chunk;
             }
             return;
@@ -96,10 +110,7 @@ export async function* streamChatMessage(userMessage: string, memory: any[]): As
 
         const stream = await openai.chat.completions.create({
             model: currentChatModel,
-            messages: [
-                { role: 'system', content: systemPrompt },
-                { role: 'user', content: userMessage }
-            ],
+            messages: messages,
             stream: true,
         });
 

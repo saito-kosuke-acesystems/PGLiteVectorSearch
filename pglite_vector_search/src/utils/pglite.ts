@@ -39,7 +39,7 @@ export async function insertMemory(content: string, embedding: number[]) {
     `INSERT INTO memory (content, embedding) VALUES ('${safeContent}', '${safeVec}')`);
 }
 
-export async function searchMemory(embedding: number[], limit: number = 5): Promise<any[]> {
+export async function searchMemory(embedding: number[], limit: number = 3): Promise<any[]> {
   const vec = JSON.stringify(embedding);
   const threshold = 0.3;  // 距離の閾値
   const result = await pglite.query(`
@@ -52,7 +52,7 @@ export async function searchMemory(embedding: number[], limit: number = 5): Prom
 }
 
 // ハイブリッド検索（β）
-export async function hybridSearchMemory(keywords: string | string[], embedding: number[], limit: number = 5): Promise<any[]> {
+export async function hybridSearchMemory(keywords: string | string[], embedding: number[], limit: number = 3): Promise<any[]> {
   const vec = JSON.stringify(embedding);
   const vectorWeight = 0.5; // ベクトル検索の重み
   const keywordWeight = 0.4; // キーワード検索の重み

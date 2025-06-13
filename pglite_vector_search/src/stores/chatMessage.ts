@@ -45,6 +45,20 @@ export const useChatStore = defineStore(
                         return []
                     })
                 console.log('searchMemory result:', memory)
+                
+                // チャット履歴を構築（最新の10件のメッセージまで）
+                const chatHistory: any[] = []
+                const messageArray = Array.from(this.messageList.values())
+                    .sort((a, b) => a.id - b.id)
+                    .slice(-10) // 最新10件まで
+                
+                for (const msg of messageArray) {
+                    chatHistory.push({
+                        role: msg.isBot ? 'assistant' : 'user',
+                        content: msg.message
+                    })
+                }
+                
                 // 応答をストリーミング表示
                 const setId = this.messageList.size + 1
                 this.messageList.set(setId, {
@@ -53,7 +67,7 @@ export const useChatStore = defineStore(
                     isBot: true
                 })
                 try {
-                    for await (const chunk of streamChatMessage(question, memory)) {
+                    for await (const chunk of streamChatMessage(question, memory, chatHistory)) {
                         const prev = this.messageList.get(setId)?.message || ''
                         this.messageList.set(setId, {
                             id: setId,
