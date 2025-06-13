@@ -19,7 +19,17 @@ from tools.excelConvert.logics.dimension_utils import (
     calculate_optimal_row_heights,
     excel_to_pixels
 )
-from tools.excelConvert.logics.excel_calculator import get_excel_calculated_values_xlwings
+from tools.excelConvert.logics.excel_calculator import (
+    get_excel_calculated_values_xlwings,
+    get_formula_cells_from_openpyxl,
+    get_excel_calculated_values_focused
+)
+from tools.excelConvert.logics.merge_utils import (
+    get_merged_cell_info,
+    should_skip_cell,
+    get_cell_merge_attributes,
+    get_merged_cell_value
+)
 from tools.excelConvert.logics.html_generator import (
     generate_html_header,
     generate_html_footer,
@@ -41,17 +51,29 @@ def excel_to_html(excel_file: str, output_file: str, sheet_names: Optional[list]
     """
     if not os.path.exists(excel_file):
         raise FileNotFoundError(f"ファイルが見つかりません: {excel_file}")
-    
-    # Excel関数の計算結果を取得（xlwingsを使用）
+      # Excel関数の計算結果を取得（複数の方法を試行）
     print("Excel関数の計算結果を取得中...")
     calculated_values = None
     
-    # xlwingsでの取得を試行（Windows環境でExcelがインストールされている場合）
-    print("xlwingsで計算結果を取得中...")
+    # 方法1: 事前に関数セルを特定してから計算
+    print("方法1: 関数セルを特定してから計算...")
     try:
-        calculated_values = get_excel_calculated_values_xlwings(excel_file)
+        formula_cells = get_formula_cells_from_openpyxl(excel_file)
+        if any(formulas for formulas in formula_cells.values()):
+            calculated_values = get_excel_calculated_values_focused(excel_file, formula_cells)
+            if calculated_values:
+                total_values = sum(len(sheet_values) for sheet_values in calculated_values.values())
+                print(f"方法1で{total_values}個の関数セル値を取得しました")
     except Exception as e:
-        print(f"xlwingsでの取得に失敗: {e}")
+        print(f"方法1での取得に失敗: {e}")
+    
+    # 方法2: 従来のxlwings方式（方法1が失敗した場合）
+    if not calculated_values or sum(len(sheet_values) for sheet_values in calculated_values.values()) == 0:
+        print("方法2: xlwingsで計算結果を取得中...")
+        try:
+            calculated_values = get_excel_calculated_values_xlwings(excel_file)
+        except Exception as e:
+            print(f"方法2での取得に失敗: {e}")
     
     # 取得に失敗した場合は空の辞書を使用
     if calculated_values is None:
@@ -72,8 +94,7 @@ def excel_to_html(excel_file: str, output_file: str, sheet_names: Optional[list]
     
     # HTMLの開始
     html_content = generate_html_header(excel_file)
-    
-    # 各シートを処理
+      # 各シートを処理
     for sheet_name in target_sheets:
         worksheet = workbook[sheet_name]
         max_row, max_col = get_cell_dimensions(worksheet)
@@ -81,6 +102,11 @@ def excel_to_html(excel_file: str, output_file: str, sheet_names: Optional[list]
         if max_row == 0 or max_col == 0:
             # 空のシートの場合はスキップ
             continue
+        
+        # 結合セル情報を取得
+        merged_info = get_merged_cell_info(worksheet)
+        merged_cells_map = merged_info['merged_cells_map']
+        print(f"シート '{sheet_name}': {len(merged_info['merged_ranges'])}個の結合セル範囲を検出")
         
         # シートヘッダーを追加
         html_content += generate_sheet_header(sheet_name)
@@ -120,8 +146,7 @@ def excel_to_html(excel_file: str, output_file: str, sheet_names: Optional[list]
         for row_idx in range(1, max_row + 1):
             # 行の高さを取得してスタイルに追加
             row_style = ""
-            
-            # 明示的に設定された行高があるかチェック
+              # 明示的に設定された行高があるかチェック
             if row_idx in worksheet.row_dimensions and worksheet.row_dimensions[row_idx].height:
                 row_height = worksheet.row_dimensions[row_idx].height
                 height_px = excel_to_pixels(row_height, False)
@@ -134,32 +159,17 @@ def excel_to_html(excel_file: str, output_file: str, sheet_names: Optional[list]
             html_content += f"            <tr{row_style}>\n"
             
             for col_idx in range(1, max_col + 1):
+                # 結合セルでスキップ対象の場合は処理しない
+                if should_skip_cell(row_idx, col_idx, merged_cells_map):
+                    continue
+                
                 cell = worksheet.cell(row=row_idx, column=col_idx)
                 
-                # セルの値を取得
-                cell_value = None
-                
-                # 関数が含まれている場合は計算結果を使用
-                if cell.data_type == 'f':  # 関数セルの場合
-                    print(f"関数セル検出: {sheet_name} 行{row_idx}, 列{col_idx}")
-                    print(f"  関数式: {cell.value}")
-                    
-                    # 事前取得した計算結果辞書から値を取得
-                    if sheet_name in calculated_values and (row_idx, col_idx) in calculated_values[sheet_name]:
-                        cell_value = calculated_values[sheet_name][(row_idx, col_idx)]
-                        print(f"  ✓ 計算結果: {cell_value}")
-                    else:
-                        # 計算結果が取得できない場合は関数式を表示
-                        cell_value = f"[関数: {cell.value}]"
-                        print(f"  ⚠ 計算結果が取得できません。関数式を表示: {cell_value}")
-                else:
-                    # 通常のセルの場合
-                    cell_value = cell.value
-                
-                if cell_value is None:
-                    cell_value = ""
-                else:
-                    cell_value = str(cell_value)
+                # 結合セルの値を適切に取得
+                cell_value = get_merged_cell_value(
+                    worksheet, row_idx, col_idx, merged_cells_map, 
+                    calculated_values, sheet_name
+                )
                 
                 # セルのスタイルを取得（幅と高さ情報を含む）
                 cell_style = get_cell_style(cell, worksheet, row_idx, col_idx)
@@ -181,8 +191,11 @@ def excel_to_html(excel_file: str, output_file: str, sheet_names: Optional[list]
                 
                 css_class = f' class="{" ".join(css_classes)}"' if css_classes else ''
                 
-                # HTMLに追加（常にstyle属性を含める）
-                html_content += f'                <td style="{cell_style}"{css_class}>{html.escape(cell_value)}</td>\n'
+                # 結合セルの属性を取得
+                merge_attrs = get_cell_merge_attributes(row_idx, col_idx, merged_cells_map)
+                
+                # HTMLに追加（結合セル属性を含める）
+                html_content += f'                <td style="{cell_style}"{css_class}{merge_attrs}>{html.escape(cell_value)}</td>\n'
             
             html_content += "            </tr>\n"
         
