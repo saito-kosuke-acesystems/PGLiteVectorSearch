@@ -1,19 +1,34 @@
 import { OpenAI } from 'openai';
+import { setOllamaConfig, generateKeyWord as ollamaGenerateKeyWord, streamChatMessage as ollamaStreamChatMessage, generateEmbedding as ollamaGenerateEmbedding, getDimension as ollamaGetDimension } from '@/utils/ollamaAPI';
 
 // baseURL, chatModel, embeddingModelを外部からセットできるようにする
 let openai: OpenAI | null = null;
-let currentBaseURL = 'http://localhost:11434/v1';
+let currentBaseURL = 'http://localhost:11434';
 let currentChatModel = 'gemma3:1b';
 let currentEmbeddingModel = 'kun432/cl-nagoya-ruri-base:latest';
 
-export function setOpenAIConfig({ baseURL, chatModel, embeddingModel }: { baseURL: string, chatModel: string, embeddingModel: string }) {
+let useOllamaAPI = false;
+
+// OpenAI APIのエンドポイントのサフィックス（本当に固定で良いのかは不明）
+const openAIEndpointSuffix = '/v1';
+
+export function setOpenAIConfig({ baseURL, chatModel, embeddingModel, useOllamaAPI: useOllama }: { baseURL: string, chatModel: string, embeddingModel: string, useOllamaAPI?: boolean }) {
     currentBaseURL = baseURL;
     currentChatModel = chatModel;
     currentEmbeddingModel = embeddingModel;
+    if (useOllama !== undefined) {
+        useOllamaAPI = useOllama;
+    }
     openai = new OpenAI({
-        baseURL: currentBaseURL,
+        baseURL: currentBaseURL + openAIEndpointSuffix,
         apiKey: 'ollama',
         dangerouslyAllowBrowser: true,
+    });
+    // ollamaAPIにも反映
+    setOllamaConfig({
+        baseURL: currentBaseURL,
+        chatModel: currentChatModel,
+        embeddingModel: currentEmbeddingModel
     });
 }
 
@@ -36,6 +51,11 @@ export async function generateKeyWord(userMessage: string): Promise<string> {
         ・キーワードが10個より少ない場合は、今あるキーワードの同義語や関連語を追加して10個にする
         例: "キーワード1","キーワード2","キーワード3"`;
 
+        if (useOllamaAPI) {
+            // Ollama APIを使用
+            return await ollamaGenerateKeyWord(userMessage, systemPrompt);
+        }
+
         const response = await openai.chat.completions.create({
             model: currentChatModel,
             messages: [
@@ -45,7 +65,6 @@ export async function generateKeyWord(userMessage: string): Promise<string> {
                 },
                 { role: 'user', content: userMessage }
             ],
-            temperature: 0.0, // 一貫性のある応答を得るために温度を0に設定
         });
 
         const content = response.choices?.[0]?.message?.content;
@@ -66,6 +85,14 @@ export async function* streamChatMessage(userMessage: string, memory: any[]): As
             ・参考情報はすでに関連性が高い順に並べられています。
             参考情報：\n${memory.map(m => m.content).join('\n')}`
             : 'ユーザの質問に答えてください。';
+
+        if (useOllamaAPI) {
+            // Ollama APIを使用
+            for await (const chunk of ollamaStreamChatMessage(userMessage, memory, systemPrompt)) {
+                yield chunk;
+            }
+            return;
+        }
 
         const stream = await openai.chat.completions.create({
             model: currentChatModel,
@@ -89,6 +116,12 @@ export async function* streamChatMessage(userMessage: string, memory: any[]): As
 export async function generateEmbedding(userMessage: string): Promise<number[]> {
     try {
         if (!openai) throw new Error('OpenAIクライアントが初期化されていません');
+
+        if (useOllamaAPI) {
+            // Ollama APIを使用
+            return await ollamaGenerateEmbedding(userMessage);
+        }
+
         const response = await openai.embeddings.create({
             model: currentEmbeddingModel,
             input: userMessage,
@@ -105,6 +138,11 @@ export async function generateEmbedding(userMessage: string): Promise<number[]> 
 export async function getDimension(): Promise<number> {
     try {
         if (!openai) throw new Error('OpenAIクライアントが初期化されていません');
+
+        if (useOllamaAPI) {
+            return await ollamaGetDimension();
+        }
+
         const response = await openai.embeddings.create({
             model: currentEmbeddingModel,
             input: "テスト",
@@ -122,6 +160,7 @@ export function getCurrentConfig() {
     return {
         baseURL: currentBaseURL,
         chatModel: currentChatModel,
-        embeddingModel: currentEmbeddingModel
+        embeddingModel: currentEmbeddingModel,
+        useOllamaAPI: useOllamaAPI
     };
 }

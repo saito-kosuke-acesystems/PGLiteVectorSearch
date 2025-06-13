@@ -51,7 +51,8 @@ function updateConfig() {
     setOpenAIConfig({
         baseURL: config.value.baseURL,
         chatModel: config.value.chatModel,
-        embeddingModel: config.value.embeddingModel
+        embeddingModel: config.value.embeddingModel,
+        useOllamaAPI: config.value.useOllamaAPI
     })
     localStorage.setItem('openai_config', JSON.stringify(config.value))
     window.alert('設定を更新しました')
@@ -63,7 +64,10 @@ const defaultConfig = getCurrentConfig();
 
 function resetConfig() {
     config.value = { ...defaultConfig };
-    setOpenAIConfig(defaultConfig);
+    setOpenAIConfig({
+        ...defaultConfig,
+        useOllamaAPI: defaultConfig.useOllamaAPI
+    });
     localStorage.setItem('openai_config', JSON.stringify(defaultConfig));
     window.alert('デフォルト設定に戻しました');
     window.location.reload();
@@ -75,7 +79,8 @@ onMounted(() => {
     setOpenAIConfig({
         baseURL: config.value.baseURL,
         chatModel: config.value.chatModel,
-        embeddingModel: config.value.embeddingModel
+        embeddingModel: config.value.embeddingModel,
+        useOllamaAPI: config.value.useOllamaAPI
     })
     // embeddingModelの次元数を取得
     getDimension().then((dimension) => {
@@ -119,9 +124,16 @@ function formatMessage(msg: string): string {
                 <label for="baseURL-input" class="sidebar-label">ollama baseURL:</label>
                 <input id="baseURL-input" v-model="config.baseURL" class="sidebar-input" />
                 <label for="chatModel-input" class="sidebar-label">chatModel:</label>
-                <input id="chatModel-input" v-model="config.chatModel" class="sidebar-input" /> <label
-                    for="embeddingModel-input" class="sidebar-label">embeddingModel:</label> <input
-                    id="embeddingModel-input" v-model="config.embeddingModel" class="sidebar-input" />
+                <input id="chatModel-input" v-model="config.chatModel" class="sidebar-input" />
+                <label for="embeddingModel-input" class="sidebar-label">embeddingModel:</label>
+                <input id="embeddingModel-input" v-model="config.embeddingModel" class="sidebar-input" />
+                <div style="margin-top: 8px;">
+                    <label for="useOllamaAPI-checkbox" class="sidebar-label">
+                        <input id="useOllamaAPI-checkbox" v-model="config.useOllamaAPI" type="checkbox"
+                            style="margin-right: 8px;" />
+                        OllamaAPI使用
+                    </label>
+                </div>
                 <div style="margin-top: 8px; display: flex; justify-content: space-between;">
                     <button @click="resetConfig" class="config-btn reset-btn" title="デフォルト設定に戻します">リセット</button>
                     <button @click="updateConfig" class="config-btn" title="設定を適用します">適用</button>

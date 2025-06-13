@@ -5,11 +5,14 @@
   "scripts": {
     "serve": "vue-cli-service serve",
     "build": "vue-cli-service build",
-    "lint": "vue-cli-service lint"
+    "lint": "vue-cli-service lint",
+    "ollama:test": "tsc src/utils/ollamaExample.ts --outDir dist && node dist/src/utils/ollamaExample.js",
+    "build:utils": "tsc src/utils/*.ts --outDir dist"
   },
   "dependencies": {
     "@electric-sql/pglite": "^0.3.2",
     "core-js": "^3.8.3",
+    "ollama-api": "^1.0.0",
     "openai": "^4.102.0",
     "pinia": "^3.0.2",
     "tiny-segmenter": "^0.2.0",
