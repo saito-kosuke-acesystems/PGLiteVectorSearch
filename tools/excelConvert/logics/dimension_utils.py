@@ -1,6 +1,8 @@
 """
 Excel 寸法計算関連のユーティリティ関数
 """
+from openpyxl.utils import get_column_letter
+from openpyxl.cell.cell import MergedCell
 
 
 def excel_to_pixels(excel_width_units: float, is_width: bool = True) -> int:
@@ -14,9 +16,9 @@ def excel_to_pixels(excel_width_units: float, is_width: bool = True) -> int:
         ピクセル値
     """
     if is_width:
-        # 列幅の変換: Excelの列幅1単位 ≈ 7ピクセル
-        # より正確には: 1文字幅 = 7ピクセル（標準フォント）
-        return max(int(excel_width_units * 7), 20)  # 最小幅20px
+        # 列幅の変換: より正確な係数を使用
+        # Excelの列幅は文字数ベースで、1単位 ≈ 6ピクセル程度が実際に近い
+        return max(int(excel_width_units * 6.0), 1)  # より小さい係数で正確に
     else:
         # 行高の変換: 1ポイント = 1.33ピクセル
         return max(int(excel_width_units * 1.33), 20)  # 最小高20px
@@ -28,13 +30,15 @@ def get_default_dimensions(worksheet) -> tuple:
     Returns:
         (default_column_width_px, default_row_height_px)
     """
-    # デフォルト列幅（Excelのデフォルトは約8.43）
-    default_col_width = getattr(worksheet, 'default_column_width', 8.43)
+    # デフォルト列幅（Excelの実際のデフォルト値を使用）
+    default_col_width = getattr(worksheet, 'default_column_width', 8.43)  # Excel本来のデフォルト
     default_col_width_px = excel_to_pixels(default_col_width, True)
     
     # デフォルト行高（Excelのデフォルトは15ポイント）
     default_row_height = getattr(worksheet, 'default_row_height', 15)
     default_row_height_px = excel_to_pixels(default_row_height, False)
+    
+    print(f"デフォルト寸法: 列幅 {default_col_width} → {default_col_width_px}px, 行高 {default_row_height} → {default_row_height_px}px")
     
     return default_col_width_px, default_row_height_px
 
@@ -54,11 +58,16 @@ def calculate_optimal_column_widths(worksheet, max_row, max_col) -> dict:
     
     for col_idx in range(1, max_col + 1):
         max_length = 0
-        column_letter = worksheet.cell(row=1, column=col_idx).column_letter
+        column_letter = get_column_letter(col_idx)  # 安全な方法で列文字を取得
         
         # 各行の該当列のセル内容の長さを計算
         for row_idx in range(1, max_row + 1):
             cell = worksheet.cell(row=row_idx, column=col_idx)
+            
+            # MergedCellの場合はスキップ
+            if isinstance(cell, MergedCell):
+                continue
+                
             if cell.value is not None:
                 # セルの値を文字列に変換して長さを計算
                 cell_text = str(cell.value)
@@ -68,17 +77,15 @@ def calculate_optimal_column_widths(worksheet, max_row, max_col) -> dict:
                 english_char_count = len(cell_text) - japanese_char_count
                 effective_length = english_char_count + (japanese_char_count * 1.5)
                 
-                max_length = max(max_length, effective_length)
+                max_length = max(max_length, effective_length)        # 最小幅と最大幅を設定（Excelの実際の設定を尊重）
+        min_width = 8    # 最小8ピクセル（Excelの極小列に対応）
+        max_width = 400  # 最大400ピクセル
         
-        # 最小幅と最大幅を設定
-        min_width = 50  # 最小50ピクセル
-        max_width = 300  # 最大300ピクセル
-        
-        # 文字数に基づく幅計算（1文字あたり約8ピクセル + パディング）
+        # 文字数に基づく幅計算（より控えめに）
         if max_length == 0:
             optimal_width = min_width
         else:
-            optimal_width = int(max_length * 8 + 20)  # 文字幅8px + パディング20px
+            optimal_width = int(max_length * 6 + 10)  # 文字幅6px + パディング10px（控えめに）
             optimal_width = max(min_width, min(optimal_width, max_width))
         
         column_widths[col_idx] = optimal_width

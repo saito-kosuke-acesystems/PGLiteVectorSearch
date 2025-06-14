@@ -2,6 +2,8 @@
 Excel セルのスタイル関連のユーティリティ関数
 """
 import html
+from openpyxl.utils import get_column_letter
+from openpyxl.cell.cell import MergedCell
 
 
 def rgb_to_hex(rgb_value) -> str:
@@ -34,6 +36,18 @@ def rgb_to_hex(rgb_value) -> str:
                 return ""
             return f"#{rgb_str.upper()}"
         
+        # typeプロパティがある場合（新しいopenpyxl形式）
+        elif hasattr(rgb_value, 'type') and rgb_value.type == 'rgb':
+            if hasattr(rgb_value, 'value') and rgb_value.value:
+                rgb_str = str(rgb_value.value)
+                if len(rgb_str) == 8:
+                    rgb_str = rgb_str[2:]
+                elif len(rgb_str) == 6:
+                    pass
+                else:
+                    return ""
+                return f"#{rgb_str.upper()}"
+        
         # 直接文字列の場合
         elif isinstance(rgb_value, str):
             rgb_str = rgb_value.replace('#', '')
@@ -49,6 +63,10 @@ def rgb_to_hex(rgb_value) -> str:
         elif hasattr(rgb_value, 'index') and rgb_value.index is not None:
             # インデックス色の場合は色を返さない（デフォルト色とみなす）
             return ""
+        
+        # その他の属性を持つ場合のデバッグ
+        else:
+            print(f"未対応の色形式: type={type(rgb_value)}, attributes={dir(rgb_value)}")
             
     except Exception as e:
         print(f"色変換エラー: {e}, 値: {rgb_value}")
@@ -70,26 +88,8 @@ def get_cell_style(cell, worksheet=None, row_idx=None, col_idx=None) -> str:
     
     from tools.excelConvert.logics.dimension_utils import excel_to_pixels
     
-    styles = []
-    
-    # セルの幅と高さを取得して適用
-    if worksheet and row_idx and col_idx:
-        # 列幅を取得（Excelの単位からピクセルに変換）
-        column_letter = cell.column_letter
-        if column_letter in worksheet.column_dimensions:
-            col_width = worksheet.column_dimensions[column_letter].width
-            if col_width:
-                # Excelの列幅をピクセルに変換
-                width_px = excel_to_pixels(col_width, True)
-                styles.append(f"width: {width_px}px")
-        
-        # 行高を取得
-        if row_idx in worksheet.row_dimensions:
-            row_height = worksheet.row_dimensions[row_idx].height
-            if row_height:
-                # Excelのポイントをピクセルに変換
-                height_px = excel_to_pixels(row_height, False)
-                styles.append(f"height: {height_px}px")
+    styles = []    # セルの個別スタイル設定（幅と高さはテーブルレベルで制御するため、ここでは他のスタイルのみ）
+    # 個々のセルでは幅と高さを設定せず、フォント、色、罫線などのみを設定
     
     # フォント設定（改善版）
     if cell.font:
@@ -137,33 +137,47 @@ def get_cell_style(cell, worksheet=None, row_idx=None, col_idx=None) -> str:
         # フォント情報がない場合のデフォルト設定
         styles.append("font-size: 11pt")
         styles.append("font-family: 'Calibri', Arial, sans-serif")
-        styles.append("color: #000000")
-    
-    # 背景色（改善版）
+        styles.append("color: #000000")    # 背景色（改善版 - より確実に取得）
     has_background = False
+    bg_color = None
+    
     if cell.fill:
-        # PatternFillの場合
+        # デバッグ情報を出力（最初の数セルのみ）
+        if row_idx and col_idx and row_idx <= 3 and col_idx <= 3:
+            print(f"セル({row_idx},{col_idx})背景色: fill_type={getattr(cell.fill, 'fill_type', 'なし')}")
+        
+        # PatternFillの場合（最も一般的）
         if hasattr(cell.fill, 'start_color') and cell.fill.start_color:
             bg_color = rgb_to_hex(cell.fill.start_color)
-            if bg_color and bg_color.upper() not in ["#00000000", "#000000"]:
-                styles.append(f"background-color: {bg_color}")
-                has_background = True
-        # GradientFillの場合
-        elif hasattr(cell.fill, 'start') and cell.fill.start:
-            bg_color = rgb_to_hex(cell.fill.start)
-            if bg_color and bg_color.upper() not in ["#00000000", "#000000"]:
-                styles.append(f"background-color: {bg_color}")
-                has_background = True
-        # fillTypeがsolidの場合
-        elif hasattr(cell.fill, 'fgColor') and cell.fill.fgColor:
+            if row_idx and col_idx and row_idx <= 3 and col_idx <= 3:
+                print(f"  start_color: {bg_color}")
+        
+        # fgColor（前景色）を試す
+        if not bg_color and hasattr(cell.fill, 'fgColor') and cell.fill.fgColor:
             bg_color = rgb_to_hex(cell.fill.fgColor)
-            if bg_color and bg_color.upper() not in ["#00000000", "#000000"]:
-                styles.append(f"background-color: {bg_color}")
-                has_background = True
+            if row_idx and col_idx and row_idx <= 3 and col_idx <= 3:
+                print(f"  fgColor: {bg_color}")
+        
+        # bgColor（背景色）を試す
+        if not bg_color and hasattr(cell.fill, 'bgColor') and cell.fill.bgColor:
+            bg_color = rgb_to_hex(cell.fill.bgColor)
+            if row_idx and col_idx and row_idx <= 3 and col_idx <= 3:
+                print(f"  bgColor: {bg_color}")
+        
+        # GradientFillの場合
+        if not bg_color and hasattr(cell.fill, 'start') and cell.fill.start:
+            bg_color = rgb_to_hex(cell.fill.start)
+            if row_idx and col_idx and row_idx <= 3 and col_idx <= 3:
+                print(f"  gradient start: {bg_color}")
+        
+        # 有効な背景色があるかチェック（白色も含める）
+        if bg_color and bg_color.upper() not in ["#00000000", "#000000", ""]:
+            styles.append(f"background-color: {bg_color}")
+            has_background = True
+            if row_idx and col_idx and row_idx <= 3 and col_idx <= 3:
+                print(f"  → 背景色適用: {bg_color}")
     
-    # 背景色が設定されていない場合は白色を設定
-    if not has_background:
-        styles.append("background-color: #FFFFFF")
+    # 背景色が設定されていない場合はデフォルトのCSSに任せる
     
     # 文字揃え
     if cell.alignment:
