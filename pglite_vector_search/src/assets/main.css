@@ -147,13 +147,13 @@ a,
     justify-content: flex-end;
 }
 
-/* メッセージの共通スタイル */
+/* メッセージバルーンの共通スタイル */
 .user-message,
 .bot-message {
     max-width: 80%;
     padding: 10px;
-    border-radius: 15px;
-    border: 1px solid #ccc;
+    border-radius: 10px;
+    margin: 5px 0;
 }
 
 .user-message {
@@ -286,4 +286,44 @@ a,
 
 .file-upload-btn:hover {
     background: var(--accent-color-hover);
+}
+/* ローディングアニメーション */
+.loading-container {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 10px;
+    color: #666;
+}
+
+.loading-spinner {
+    width: 16px;
+    height: 16px;
+    border: 2px solid #f3f3f3;
+    border-top: 2px solid #3498db;
+    border-radius: 50%;
+    animation: spin 1s linear infinite;
+}
+
+.loading-text {
+    font-size: 14px;
+    color: #666;
+}
+
+.loading-timer {
+    font-weight: bold;
+    color: #666;
+}
+
+@keyframes spin {
+    0% { transform: rotate(0deg); }
+    100% { transform: rotate(360deg); }
+}
+
+/* 応答時間表示 */
+.response-time {
+    font-size: 12px;
+    color: #999;
+    margin-top: 5px;
+    font-style: italic;
 }

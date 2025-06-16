@@ -29,7 +29,7 @@ const onFileChange = async (event: Event) => {
     if (target.files && target.files.length > 0) {
         uploadedFile.value = target.files[0]
         chatStore.isLoading = true
-        chatStore.addMessage(`ファイルをアップロードしています: ${uploadedFile.value.name}`, true)
+        chatStore.addMessage(`ファイルを参考情報としてロードします。: ${uploadedFile.value.name}`, true)
         await chatStore.uploadFile(uploadedFile.value)
         uploadedFile.value = null
     }

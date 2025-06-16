@@ -2,6 +2,10 @@ export interface MessageData {
   id: number
   message: string
   isBot: boolean
+  isStreaming?: boolean
+  streamingStartTime?: number
+  responseTime?: number
+  isFileUpload?: boolean
 }
 
 export interface SendMessage {

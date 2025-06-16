@@ -25,6 +25,16 @@ export const useChatStore = defineStore(
             },
             // ボットから回答を受けメッセージを追加
             async getBotReply(question: string) {
+                // バルーン作成
+                const setId = this.messageList.size + 1
+                const startTime = Date.now()
+                this.messageList.set(setId, {
+                    id: setId,
+                    message: '',
+                    isBot: true,
+                    isStreaming: true,
+                    streamingStartTime: startTime
+                })
                 // 質問をセグメント化し、キーワードを抽出
                 // const keywords = extractKeywords(question)
                 // console.log('Extracted keywords:', keywords)
@@ -45,43 +55,58 @@ export const useChatStore = defineStore(
                         return []
                     })
                 console.log('searchMemory result:', memory)
-                
+
                 // チャット履歴を構築（最新の10件のメッセージまで）
                 const chatHistory: any[] = []
                 const messageArray = Array.from(this.messageList.values())
                     .sort((a, b) => a.id - b.id)
                     .slice(-10) // 最新10件まで
-                
+
                 for (const msg of messageArray) {
                     chatHistory.push({
                         role: msg.isBot ? 'assistant' : 'user',
                         content: msg.message
                     })
-                }
-                
-                // 応答をストリーミング表示
-                const setId = this.messageList.size + 1
-                this.messageList.set(setId, {
-                    id: setId,
-                    message: '',
-                    isBot: true
-                })
-                try {
+                }                try {
+                    // ストリーミングでチャットメッセージを取得
                     for await (const chunk of streamChatMessage(question, memory, chatHistory)) {
                         const prev = this.messageList.get(setId)?.message || ''
                         this.messageList.set(setId, {
                             id: setId,
                             message: prev + chunk,
-                            isBot: true
+                            isBot: true,
+                            isStreaming: false,
+                            streamingStartTime: undefined,
+                            responseTime: (Date.now() - startTime) / 1000
                         })
                     }
                 } catch (reason) {
                     errorHandler(reason)
+                    // エラー時もストリーミング状態を解除
+                    const currentMessage = this.messageList.get(setId)
+                    if (currentMessage) {
+                        this.messageList.set(setId, {
+                            ...currentMessage,
+                            isStreaming: false,
+                            streamingStartTime: undefined,
+                            responseTime: (Date.now() - startTime) / 1000
+                        })
+                    }
                 } finally {
                     this.isLoading = false
                 }
-            },
-            async uploadFile(file: File) {
+            },            async uploadFile(file: File) {                // アップロード用のメッセージバルーンを作成
+                const setId = this.messageList.size + 1
+                const startTime = Date.now()
+                this.messageList.set(setId, {
+                    id: setId,
+                    message: '',
+                    isBot: true,
+                    isStreaming: true,
+                    streamingStartTime: startTime,
+                    isFileUpload: true
+                })
+                
                 try {
                     // ファイルをチャンクに分割
                     const chunks = await chunkFile(file, 1000)
@@ -99,9 +124,30 @@ export const useChatStore = defineStore(
                             await insertMemory(chunk, vectorchunk)
                                 .catch((reason) => errorHandler(reason))
                         }
+                    }                    // 完了メッセージに更新
+                    this.messageList.set(setId, {
+                        id: setId,
+                        message: 'ファイルのアップロードが完了しました。',
+                        isBot: true,
+                        isStreaming: false,
+                        streamingStartTime: undefined,
+                        responseTime: (Date.now() - startTime) / 1000,
+                        isFileUpload: true
+                    })
+                } catch (reason) {
+                    errorHandler(reason)
+                    // エラー時もストリーミング状態を解除
+                    const currentMessage = this.messageList.get(setId)
+                    if (currentMessage) {
+                        this.messageList.set(setId, {
+                            ...currentMessage,
+                            message: 'ファイルのアップロードに失敗しました。',
+                            isStreaming: false,
+                            streamingStartTime: undefined,
+                            responseTime: (Date.now() - startTime) / 1000,
+                            isFileUpload: true
+                        })
                     }
-
-                    this.addMessage('ファイルのアップロードが完了しました。', true)
                 } finally {
                     this.isLoading = false
                 }

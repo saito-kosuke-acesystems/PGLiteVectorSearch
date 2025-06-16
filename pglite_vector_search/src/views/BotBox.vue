@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import '@/assets/main.css'
-import { computed, nextTick, onMounted, ref, watch } from 'vue'
+import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
 import { useChatStore } from '@/stores/chatMessage'
 import { MessageData } from '@/models/chatMessage'
 import ChatForm from '@/components/ChatForm.vue'
@@ -15,6 +15,33 @@ const messageList = computed((): Map<number, MessageData> => {
 
 const initialized = ref(false);
 const containerRef = ref<HTMLElement | null>(null);
+const currentTime = ref(Date.now());
+
+// リアルタイムで現在時刻を更新するタイマー
+let timeUpdateInterval: number | null = null;
+
+onMounted(() => {
+    timeUpdateInterval = setInterval(() => {
+        currentTime.value = Date.now();
+    }, 100); // 100msごとに更新
+});
+
+onUnmounted(() => {
+    if (timeUpdateInterval) {
+        clearInterval(timeUpdateInterval);
+    }
+});
+
+// 経過時間を計算する関数
+const getElapsedTime = (startTime: number): string => {
+    const elapsed = (currentTime.value - startTime) / 1000;
+    return elapsed.toFixed(1);
+};
+
+// ローディングテキストを判定する関数
+const getLoadingText = (message: MessageData): string => {
+    return message.isFileUpload ? 'ファイルをアップロードしています...' : '回答を生成中...';
+};
 
 const scrollToBottom = () => {
     if (containerRef.value) {
@@ -141,11 +168,25 @@ function formatMessage(msg: string): string {
             </template>
         </div>
         <!-- メインコンテンツ（チャット） -->
-        <div class="main-content" ref="containerRef">
-            <div class="messages-container">
+        <div class="main-content" ref="containerRef">            <div class="messages-container">
                 <template v-for="[id, message] in messageList" v-bind:key="id">
-                    <div class="message-wrapper" :class="{ user: !message.isBot }">
-                        <div v-if="message.isBot" class="bot-message" v-html="formatMessage(message.message)"></div>
+                    <div class="message-wrapper" :class="{ user: !message.isBot }">                        <div v-if="message.isBot" class="bot-message">
+                            <!-- ローディング中の表示 -->                            <div v-if="message.isStreaming && !message.message" class="loading-container">
+                                <div class="loading-spinner"></div>
+                                <span class="loading-text">
+                                    {{ getLoadingText(message) }}
+                                    <span v-if="message.streamingStartTime" class="loading-timer">
+                                        ({{ getElapsedTime(message.streamingStartTime) }}秒)
+                                    </span>
+                                </span>
+                            </div><!-- メッセージ内容 -->
+                            <div v-else>
+                                <div v-html="formatMessage(message.message)"></div>
+                                <div v-if="message.responseTime" class="response-time">
+                                    (応答時間: {{ message.responseTime.toFixed(1) }}秒)
+                                </div>
+                            </div>
+                        </div>
                         <div v-else class="user-message">{{ message.message }}</div>
                     </div>
                 </template>
@@ -158,4 +199,5 @@ function formatMessage(msg: string): string {
     </div>
 </template>
 
-<style></style>
+<style>
+</style>
