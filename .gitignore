@@ -1,4 +1,3 @@
 download
 .vscode
-pyTest
-/tools/excelConvert/logics/__pycache__
+.venv
