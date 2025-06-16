@@ -1,0 +1,6 @@
+# AI/API関連  
+openai>=1.0.0
+
+# Web/データ取得関連
+requests>=2.28.0
+html2text>=2020.1.16

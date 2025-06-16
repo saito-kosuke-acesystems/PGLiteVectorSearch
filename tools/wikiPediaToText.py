@@ -7,7 +7,7 @@ import re
 # 日本語版ウィキペからテキストデータを取得するスクリプト
 
 URL = "https://ja.wikipedia.org/w/api.php"
-title = "Mrs. GREEN APPLE"
+title = "機動戦士Gundam_GQuuuuuuX"
 
 PARAMS = {
     "action": "parse",
