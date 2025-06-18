@@ -1,78 +1,124 @@
-export async function chunkFile(file: File, chunkSize: number = 1000): Promise<{content: string, filename: string}[]> {
+// セクションの型定義
+interface Section {
+    heading: string;
+    content: string;
+}
+
+export async function chunkFile(file: File, chunkSize: number = 1000): Promise<{ section: string, content: string, filename: string }[]> {
 
     // 拡張子別にファイルを処理
     const ext = file.name.split('.').pop()?.toLowerCase()
     let text: string;
-    let chunks: string[] = [];
+    let sections: Section[] = [];
     switch (ext) {
         case 'txt':
             text = await file.text();
-            chunks = await chunkTxt(text);
+            sections = await chunkTxt(text, chunkSize);
             break;
         case 'md':
             text = await file.text();
-            chunks = await chunkMd(text);
+            sections = await chunkMd(text, chunkSize);
             break
         default:
             // 例外をスロー
             throw new Error('対応していないファイル形式です。: ' + ext);
     }
 
-    // チャンクとファイル名のペアを返す
-    return chunks.map(content => ({
-        content,
+    // セクションとファイル名のペアを返す
+    return sections.map(section => ({
+        section: section.heading,
+        content: section.content,
         filename: file.name
     }));
 }
 
-async function chunkTxt(text: string): Promise<string[]> {
-
-    // MEMO:Wikipediaから取得したファイル専用の分割方法になってます
-    // テキストを「改行＋== 」の直前で分割
-    const retChunks = text.split(/\r?\n==\s+/).map(chunk => chunk.trim()).filter(chunk => chunk.length > 0)
-
-    // チャンクの文字数が一定値を超える場合はさらに分割
-    const maxChunkSize = 1000;
-    for (let i = 0; i < retChunks.length; i++) {
-        if (retChunks[i].length > maxChunkSize) {
-            const subChunks: string[] = [];
-            for (let j = 0; j < retChunks[i].length; j += maxChunkSize) {
-                subChunks.push(retChunks[i].slice(j, j + maxChunkSize));
-            }
-            retChunks.splice(i, 1, ...subChunks);
-            i += subChunks.length - 1; // インデックスを調整
-        }
-    }
-
-    return retChunks;
+async function chunkTxt(text: string, chunkSize: number): Promise<Section[]> {
+    // splitLongContentを使用してテキストを分割
+    return splitLongContent('# 無題', text, chunkSize);
 }
 
-async function chunkMd(text: string): Promise<string[]> {
+async function chunkMd(text: string, chunkSize: number): Promise<Section[]> {
+    const sections: Section[] = [];
 
-    // テキストを「改行+# 」の直前で分割
-    const retChunks = text.split(/\r?\n#\s+/).map(chunk => chunk.trim()).filter(chunk => chunk.length > 0)
+    // テキストを「# 」で始まる行で分割
+    const lines = text.split(/\r?\n/);
+    let currentHeading = '';
+    let currentContent: string[] = [];
 
-    // チャンクの文字数が一定値を超える場合はさらに分割
-    // 分割時は1つ前のチャンクとオーバーラップさせる
-    const maxChunkSize = 500;
-    const overlap = 100;
-    for (let i = 0; i < retChunks.length; i++) {
-        // 改行コードを削除
-        retChunks[i] = retChunks[i].replace(/\r?\n/g, ' ');
-        if (retChunks[i].length > maxChunkSize) {
-            const subChunks: string[] = [];
-            let j = 0;
-            while (j < retChunks[i].length) {
-                // オーバーラップ部分を考慮して分割
-                const start = j === 0 ? 0 : Math.max(0, j - overlap);
-                const end = j + maxChunkSize;
-                subChunks.push(retChunks[i].slice(start, end));
-                j += maxChunkSize;
+    for (const line of lines) {
+        if (line.startsWith('# ')) {
+            // 前のセクションを保存（存在する場合）
+            if (currentHeading) {
+                const content = currentContent.join('\n').trim();
+                // セクション内容が長い場合は分割
+                const splitSections = splitLongContent(currentHeading, content, chunkSize);
+                sections.push(...splitSections);
             }
-            retChunks.splice(i, 1, ...subChunks);
-            i += subChunks.length - 1; // インデックスを調整
+
+            // 新しいセクション開始
+            currentHeading = line;
+            currentContent = [];
+        } else {
+            // 現在のセクションにコンテンツを追加
+            currentContent.push(line);
         }
     }
 
-    return retChunks;
+    // 最後のセクションを保存
+    if (currentHeading) {
+        const content = currentContent.join('\n').trim();
+        const splitSections = splitLongContent(currentHeading, content, chunkSize);
+        sections.push(...splitSections);
+    }
+
+    // 見出しのないコンテンツがある場合の処理
+    if (!currentHeading && currentContent.length > 0) {
+        const content = currentContent.join('\n').trim();
+        if (content) {
+            const splitSections = splitLongContent('# 無題', content, chunkSize);
+            sections.push(...splitSections);
+        }
+    }
+
+    return sections;
+}
+
+// 長いコンテンツを指定されたサイズで分割する関数
+function splitLongContent(heading: string, content: string, chunkSize: number): Section[] {
+    if (content.length <= chunkSize) {
+        return [{
+            heading: heading,
+            content: content
+        }];
+    }
+
+    const sections: Section[] = [];
+    const lines = content.split('\n');
+    let currentChunk = '';
+
+    for (const line of lines) {
+        if (currentChunk.length + line.length + 1 > chunkSize) {
+            // 現在のチャンクがchunkSizeを超える場合、チャンクを保存
+            if (currentChunk.trim()) {
+                sections.push({
+                    heading: heading,
+                    content: currentChunk.trim()
+                });
+            }
+            currentChunk = line; // 新しいチャンクを開始
+        } else {
+            // 現在のチャンクに行を追加
+            currentChunk += (currentChunk ? '\n' : '') + line;
+        }
+    }
+
+    // 最後のチャンクを保存
+    if (currentChunk.trim()) {
+        sections.push({
+            heading: heading,
+            content: currentChunk.trim()
+        });
+    }
+
+    return sections;
 }

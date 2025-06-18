@@ -22,6 +22,7 @@ export async function initMemory(dimension: number) {
   CREATE TABLE IF NOT EXISTS memory (
     id SERIAL PRIMARY KEY,
     filename TEXT,
+    section TEXT,
     content TEXT NOT NULL,
     embedding vector('${dimension}')
   );
@@ -29,23 +30,24 @@ export async function initMemory(dimension: number) {
 
 }
 
-export async function insertMemory(content: string, embedding: number[], filename?: string) {
+export async function insertMemory(content: string, embedding: number[], filename?: string, section?: string) {
   const vec = JSON.stringify(embedding);
-  // contentとvecとfilenameをエスケープ
+  // エスケープ処理
   const safeContent = content.replace(/'/g, "''");
   const safeVec = vec.replace(/'/g, "''");
   const safeFilename = filename ? filename.replace(/'/g, "''") : null;
+  const safeSection = section ? section.replace(/'/g, "''") : null;
 
   // 高速化の為awaitしない なんかあったら戻す
   pglite.exec(
-    `INSERT INTO memory (filename, content, embedding) VALUES ('${safeFilename}', '${safeContent}', '${safeVec}')`);
+    `INSERT INTO memory (filename, section, content, embedding) VALUES ('${safeFilename}', '${safeSection}', '${safeContent}', '${safeVec}')`);
 }
 
 export async function searchMemory(embedding: number[], limit: number = 3): Promise<any[]> {
   const vec = JSON.stringify(embedding);
   const threshold = 0.3;  // 距離の閾値
   const result = await pglite.query(`
-    SELECT id, filename, content, embedding, (embedding <=> '${vec}') AS distance
+    SELECT id, filename, section, content, embedding, (embedding <=> '${vec}') AS distance
     FROM memory
     WHERE (embedding <=> '${vec}') < ${threshold}
     ORDER BY distance
@@ -110,17 +112,19 @@ export async function hybridSearchMemory(keywords: string | string[], embedding:
       ELSE 0
     END + 
     (${vectorWeight} * (1 - (embedding <=> '${vec}')))
-  `; const result = await pglite.query(`
+  `;
+  const result = await pglite.query(`
     WITH scored_results AS (
       SELECT 
         id, 
         filename,
+        section,
         content,
         (embedding <=> '${vec}') AS vector_distance,
         ${combinedScoreExpression} AS combined_score
       FROM memory
     )
-    SELECT id, filename, content, vector_distance, combined_score
+    SELECT id, filename, section, content, vector_distance, combined_score
     FROM scored_results
     WHERE combined_score >= ${minCombinedScore}
     ORDER BY combined_score DESC

@@ -110,7 +110,7 @@ export const useChatStore = defineStore(
 
                 try {
                     // ファイルをチャンクに分割
-                    const chunks = await chunkFile(file, 1000)
+                    const chunks = await chunkFile(file, 500)
                         .catch((reason) => {
                             errorHandler(reason)
                             return []
@@ -121,7 +121,7 @@ export const useChatStore = defineStore(
                         const vectorchunk = await generateEmbedding(chunk.content)
                             .catch((reason) => errorHandler(reason))
                         if (vectorchunk) {
-                            await insertMemory(chunk.content, vectorchunk, chunk.filename)
+                            await insertMemory(chunk.content, vectorchunk, chunk.filename, chunk.section)
                                 .catch((reason) => errorHandler(reason))
                         }
                     }// 完了メッセージに更新
