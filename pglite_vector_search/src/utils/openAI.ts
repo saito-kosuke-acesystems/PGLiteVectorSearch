@@ -79,6 +79,10 @@ export async function* streamChatMessage(userMessage: string, memory: any[], cha
     try {
         if (!openai) throw new Error('OpenAIクライアントが初期化されていません');
         
+        // 参考ファイル名を取得（重複を除く）
+        const referenceFiles = memory.length > 0 ? 
+            Array.from(new Set(memory.filter(m => m.filename).map(m => m.filename))) : [];
+        
         // チャット履歴を考慮したシステムプロンプト
         let systemPrompt = '';
         if (memory.length > 0) {
@@ -105,6 +109,10 @@ export async function* streamChatMessage(userMessage: string, memory: any[], cha
             for await (const chunk of ollamaStreamChatMessage(userMessage, memory, systemPrompt, chatHistory)) {
                 yield chunk;
             }
+            // 回答の最後に参考ファイル名を追加
+            if (referenceFiles.length > 0) {
+                yield `\n\n【参考ファイル】\n${referenceFiles.join(', ')}`;
+            }
             return;
         }
 
@@ -117,6 +125,11 @@ export async function* streamChatMessage(userMessage: string, memory: any[], cha
         for await (const chunk of stream) {
             const content = chunk.choices?.[0]?.delta?.content;
             if (content) yield content;
+        }
+        
+        // 回答の最後に参考ファイル名を追加
+        if (referenceFiles.length > 0) {
+            yield `\n\n【参考ファイル】\n${referenceFiles.join(', ')}`;
         }
     } catch (error) {
         console.error('Error streaming chat message:', error);

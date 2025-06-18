@@ -67,7 +67,7 @@ export const useChatStore = defineStore(
                         role: msg.isBot ? 'assistant' : 'user',
                         content: msg.message
                     })
-                }                try {
+                } try {
                     // ストリーミングでチャットメッセージを取得
                     for await (const chunk of streamChatMessage(question, memory, chatHistory)) {
                         const prev = this.messageList.get(setId)?.message || ''
@@ -95,7 +95,8 @@ export const useChatStore = defineStore(
                 } finally {
                     this.isLoading = false
                 }
-            },            async uploadFile(file: File) {                // アップロード用のメッセージバルーンを作成
+            }, async uploadFile(file: File) {
+                // アップロード用のメッセージバルーンを作成
                 const setId = this.messageList.size + 1
                 const startTime = Date.now()
                 this.messageList.set(setId, {
@@ -106,7 +107,7 @@ export const useChatStore = defineStore(
                     streamingStartTime: startTime,
                     isFileUpload: true
                 })
-                
+
                 try {
                     // ファイルをチャンクに分割
                     const chunks = await chunkFile(file, 1000)
@@ -114,17 +115,16 @@ export const useChatStore = defineStore(
                             errorHandler(reason)
                             return []
                         })
-
                     // チャンク単位でベクトル化し、pgliteに保存
                     for (const chunk of chunks) {
-                        console.log('Processing chunk:', chunk)
-                        const vectorchunk = await generateEmbedding(chunk)
+                        console.log('Processing chunk:', chunk.content)
+                        const vectorchunk = await generateEmbedding(chunk.content)
                             .catch((reason) => errorHandler(reason))
                         if (vectorchunk) {
-                            await insertMemory(chunk, vectorchunk)
+                            await insertMemory(chunk.content, vectorchunk, chunk.filename)
                                 .catch((reason) => errorHandler(reason))
                         }
-                    }                    // 完了メッセージに更新
+                    }// 完了メッセージに更新
                     this.messageList.set(setId, {
                         id: setId,
                         message: 'ファイルのアップロードが完了しました。',

@@ -16,12 +16,12 @@ export async function initMemory(dimension: number) {
 
   // ベクトル検索用の pgvector 拡張を有効化
   await pglite.exec("CREATE EXTENSION IF NOT EXISTS vector;");
-
   // 検索用 memory テーブルを定義
   // MEMO：vectorの次元数はモデルに依存する為、使用するモデルに合わせて変える事
   await pglite.exec(`
   CREATE TABLE IF NOT EXISTS memory (
     id SERIAL PRIMARY KEY,
+    filename TEXT,
     content TEXT NOT NULL,
     embedding vector('${dimension}')
   );
@@ -29,21 +29,23 @@ export async function initMemory(dimension: number) {
 
 }
 
-export async function insertMemory(content: string, embedding: number[]) {
+export async function insertMemory(content: string, embedding: number[], filename?: string) {
   const vec = JSON.stringify(embedding);
-  // contentとvecをエスケープ
+  // contentとvecとfilenameをエスケープ
   const safeContent = content.replace(/'/g, "''");
   const safeVec = vec.replace(/'/g, "''");
+  const safeFilename = filename ? filename.replace(/'/g, "''") : null;
+
   // 高速化の為awaitしない なんかあったら戻す
   pglite.exec(
-    `INSERT INTO memory (content, embedding) VALUES ('${safeContent}', '${safeVec}')`);
+    `INSERT INTO memory (filename, content, embedding) VALUES ('${safeFilename}', '${safeContent}', '${safeVec}')`);
 }
 
 export async function searchMemory(embedding: number[], limit: number = 3): Promise<any[]> {
   const vec = JSON.stringify(embedding);
   const threshold = 0.3;  // 距離の閾値
   const result = await pglite.query(`
-    SELECT id, content, embedding, (embedding <=> '${vec}') AS distance
+    SELECT id, filename, content, embedding, (embedding <=> '${vec}') AS distance
     FROM memory
     WHERE (embedding <=> '${vec}') < ${threshold}
     ORDER BY distance
@@ -62,31 +64,31 @@ export async function hybridSearchMemory(keywords: string | string[], embedding:
   let keywordConditions = [];
   let keywordScoreExpression = "";
   let keywordCondition = "";
-  
+
   if (Array.isArray(keywords)) {
     // 空の配列または空文字のみの配列の場合は特殊処理
     if (keywords.length === 0 || keywords.every(k => k.trim() === '')) {
       return searchMemory(embedding, limit);
     }
-      // 有効なキーワードのみをフィルタリングし、重複を除去
+    // 有効なキーワードのみをフィルタリングし、重複を除去
     const validKeywords = Array.from(new Set(keywords.filter(k => k.trim() !== '').map(k => k.trim().toLowerCase())));
-    
+
     // 各キーワードの存在をチェックする式を作成（0または1の値）
     keywordConditions = validKeywords.map(k => {
       const safeKeyword = k.replace(/'/g, "''");
       return `CASE WHEN LOWER(content) LIKE '%${safeKeyword}%' THEN 1 ELSE 0 END`;
     });
-    
+
     if (keywordConditions.length === 0) {
       return searchMemory(embedding, limit);
     }
-    
+
     // WHERE句用の条件
-    const whereConditions = validKeywords.map(k => 
+    const whereConditions = validKeywords.map(k =>
       `content ILIKE '%${k.replace(/'/g, "''")}%'`
     );
     keywordCondition = whereConditions.join(' OR ');
-    
+
     // キーワードスコア計算式（マッチしたキーワード数に基づく、重複なし）
     keywordScoreExpression = `LEAST((${keywordConditions.join(' + ')}) * ${keywordWeight} / ${validKeywords.length}, ${maxKeywordScore})`;
   } else {
@@ -95,9 +97,9 @@ export async function hybridSearchMemory(keywords: string | string[], embedding:
     if (safeKeyword === '') {
       return searchMemory(embedding, limit);
     }
-    
+
     keywordCondition = `content ILIKE '%${safeKeyword}%'`;
-    
+
     // 存在ベースのスコア計算（0または1）
     keywordScoreExpression = `CASE WHEN LOWER(content) LIKE '%${safeKeyword}%' THEN ${keywordWeight} ELSE 0 END`;
   }
@@ -108,18 +110,17 @@ export async function hybridSearchMemory(keywords: string | string[], embedding:
       ELSE 0
     END + 
     (${vectorWeight} * (1 - (embedding <=> '${vec}')))
-  `;
-
-  const result = await pglite.query(`
+  `; const result = await pglite.query(`
     WITH scored_results AS (
       SELECT 
         id, 
+        filename,
         content,
         (embedding <=> '${vec}') AS vector_distance,
         ${combinedScoreExpression} AS combined_score
       FROM memory
     )
-    SELECT id, content, vector_distance, combined_score
+    SELECT id, filename, content, vector_distance, combined_score
     FROM scored_results
     WHERE combined_score >= ${minCombinedScore}
     ORDER BY combined_score DESC

@@ -1,4 +1,4 @@
-export async function chunkFile(file: File, chunkSize: number = 1000): Promise<string[]> {
+export async function chunkFile(file: File, chunkSize: number = 1000): Promise<{content: string, filename: string}[]> {
 
     // 拡張子別にファイルを処理
     const ext = file.name.split('.').pop()?.toLowerCase()
@@ -18,7 +18,11 @@ export async function chunkFile(file: File, chunkSize: number = 1000): Promise<s
             throw new Error('対応していないファイル形式です。: ' + ext);
     }
 
-    return chunks;
+    // チャンクとファイル名のペアを返す
+    return chunks.map(content => ({
+        content,
+        filename: file.name
+    }));
 }
 
 async function chunkTxt(text: string): Promise<string[]> {
