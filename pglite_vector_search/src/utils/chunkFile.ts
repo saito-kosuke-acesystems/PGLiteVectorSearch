@@ -40,18 +40,23 @@ async function chunkTxt(text: string, chunkSize: number): Promise<Section[]> {
 async function chunkMd(text: string, chunkSize: number): Promise<Section[]> {
     const sections: Section[] = [];
 
-    // テキストを「# 」で始まる行で分割
+    // テキストに「# 」で始まる行があるかチェック
     const lines = text.split(/\r?\n/);
+    const hasH1 = lines.some(line => line.startsWith('# '));
+    
+    // 分割する見出しレベルを決定
+    const headingPrefix = hasH1 ? '# ' : '## ';
+    
     let currentHeading = '';
     let currentContent: string[] = [];
 
     for (const line of lines) {
-        if (line.startsWith('## ')) {
+        if (line.startsWith(headingPrefix)) {
             // 前のセクションを保存（存在する場合）
             if (currentHeading) {
                 const content = currentContent.join('\n').trim();
-                // セクション内容が長い場合は分割
-                const splitSections = splitLongContent(currentHeading, content, chunkSize);
+                // セクション内容を文章の切れ目で分割
+                const splitSections = splitBySentence(currentHeading, content, chunkSize);
                 sections.push(...splitSections);
             }
 
@@ -67,7 +72,7 @@ async function chunkMd(text: string, chunkSize: number): Promise<Section[]> {
     // 最後のセクションを保存
     if (currentHeading) {
         const content = currentContent.join('\n').trim();
-        const splitSections = splitLongContent(currentHeading, content, chunkSize);
+        const splitSections = splitBySentence(currentHeading, content, chunkSize);
         sections.push(...splitSections);
     }
 
@@ -75,9 +80,74 @@ async function chunkMd(text: string, chunkSize: number): Promise<Section[]> {
     if (!currentHeading && currentContent.length > 0) {
         const content = currentContent.join('\n').trim();
         if (content) {
-            const splitSections = splitLongContent('# 無題', content, chunkSize);
+            const splitSections = splitBySentence('# 無題', content, chunkSize);
             sections.push(...splitSections);
         }
+    }
+
+    return sections;
+}
+
+// 文章の切れ目でコンテンツを分割する関数
+function splitBySentence(heading: string, content: string, chunkSize: number): Section[] {
+    if (!content.trim()) {
+        return [];
+    }
+
+    // まずは段落で分割（連続する改行）
+    const paragraphs = content.split(/\n\s*\n/).filter(p => p.trim());
+    const sections: Section[] = [];
+    let currentChunk = '';
+
+    for (const paragraph of paragraphs) {
+        // 段落内を句点で分割
+        const sentences = paragraph.split('。').filter(s => s.trim());
+        
+        for (let i = 0; i < sentences.length; i++) {
+            let sentence = sentences[i].trim();
+            if (!sentence) continue;
+            
+            // 最後の文でない場合は句点を追加
+            if (i < sentences.length - 1) {
+                sentence += '。';
+            }
+            
+            // 現在のチャンクに追加すると長すぎる場合
+            if (currentChunk && (currentChunk.length + sentence.length + 1) > chunkSize) {
+                // 現在のチャンクを保存
+                if (currentChunk.trim()) {
+                    sections.push({
+                        heading: heading,
+                        content: currentChunk.trim()
+                    });
+                }
+                currentChunk = sentence;
+            } else {
+                // 現在のチャンクに追加
+                currentChunk += (currentChunk ? '\n' : '') + sentence;
+            }
+        }
+        
+        // 段落の終わりで改行を追加（次の段落がある場合）
+        if (currentChunk && paragraphs.indexOf(paragraph) < paragraphs.length - 1) {
+            currentChunk += '\n';
+        }
+    }
+
+    // 最後のチャンクを保存
+    if (currentChunk.trim()) {
+        sections.push({
+            heading: heading,
+            content: currentChunk.trim()
+        });
+    }
+
+    // 空の場合は元のコンテンツをそのまま返す
+    if (sections.length === 0) {
+        return [{
+            heading: heading,
+            content: content
+        }];
     }
 
     return sections;
