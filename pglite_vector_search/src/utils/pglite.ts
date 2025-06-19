@@ -114,24 +114,43 @@ export async function hybridSearchMemory(keywords: string | string[], embedding:
       ELSE 0
     END + 
     (${vectorWeight} * (1 - (embedding <=> '${vec}')))
-  `;  const result = await pglite.query(`
+  `;
+  
+  // 検索条件でsectionを取得（重複なし、スコア順）
+  const sectionResult = await pglite.query(`
     WITH scored_results AS (
       SELECT 
-        id, 
-        filename,
         section,
-        section_sequence,
-        content,
-        (embedding <=> '${vec}') AS vector_distance,
-        ${combinedScoreExpression} AS combined_score
+        MAX(${combinedScoreExpression}) AS max_combined_score
       FROM memory
+      WHERE ${keywordCondition} OR (embedding <=> '${vec}') < 1.0
+      GROUP BY section
     )
-    SELECT id, filename, section, section_sequence, content, vector_distance, combined_score
+    SELECT section
     FROM scored_results
-    WHERE combined_score >= ${minCombinedScore}
-    ORDER BY combined_score DESC
+    WHERE max_combined_score >= ${minCombinedScore}
+    ORDER BY max_combined_score DESC
     LIMIT ${limit};
   `);
+  
+  // 取得したsectionに基づいて、同じsectionのチャンクを全て取得
+  if (sectionResult.rows.length === 0) {
+    return [];
+  }
+  
+  const sections = sectionResult.rows.map((row: any) => row.section);
+  const sectionConditions = sections.map(section => {
+    const safeSection = section ? section.replace(/'/g, "''") : null;
+    return safeSection ? `section = '${safeSection}'` : `section IS NULL`;
+  }).join(' OR ');
+  
+  const result = await pglite.query(`
+    SELECT id, filename, section, section_sequence, content, embedding, (embedding <=> '${vec}') AS distance
+    FROM memory
+    WHERE ${sectionConditions}
+    ORDER BY section, section_sequence;
+  `);
+  
   return result.rows;
 }
 

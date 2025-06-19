@@ -46,7 +46,7 @@ async function chunkMd(text: string, chunkSize: number): Promise<Section[]> {
     let currentContent: string[] = [];
 
     for (const line of lines) {
-        if (line.startsWith('# ')) {
+        if (line.startsWith('## ')) {
             // 前のセクションを保存（存在する場合）
             if (currentHeading) {
                 const content = currentContent.join('\n').trim();

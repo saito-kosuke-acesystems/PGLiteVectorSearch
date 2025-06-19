@@ -47,7 +47,7 @@ export const useChatStore = defineStore(
                         return []
                     })
                 // キーワードと質問のベクトルから参考情報を取得
-                const memory = await hybridSearchMemory(keywords, vectorQuestion)
+                const memory = await hybridSearchMemory(keywords, vectorQuestion, 2)
                     .catch((reason) => {
                         errorHandler(reason)
                         return []
@@ -125,15 +125,16 @@ export const useChatStore = defineStore(
                         if (vectorchunk) {
                             // セクションの連番を取得または初期化
                             const sectionKey = `${chunk.filename || 'unknown'}_${chunk.section || 'unknown'}`
-                            let sectionSequence = sectionSequenceMap.get(sectionKey) || 0
-                            
+                            const sectionSequence = sectionSequenceMap.get(sectionKey) || 0
+
                             await insertMemory(chunk.content, vectorchunk, chunk.filename, chunk.section, sectionSequence)
                                 .catch((reason) => errorHandler(reason))
-                            
+
                             // 次回用に連番をインクリメント
                             sectionSequenceMap.set(sectionKey, sectionSequence + 1)
                         }
-                    }// 完了メッセージに更新
+                    }
+                    // 完了メッセージに更新
                     this.messageList.set(setId, {
                         id: setId,
                         message: 'ファイルのアップロードが完了しました。',
