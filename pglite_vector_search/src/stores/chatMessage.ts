@@ -35,9 +35,7 @@ export const useChatStore = defineStore(
                     isStreaming: true,
                     streamingStartTime: startTime
                 })
-                // 質問をセグメント化し、キーワードを抽出
-                // const keywords = extractKeywords(question)
-                // console.log('Extracted keywords:', keywords)
+                // 質問をセグメント化し、キーワードを作成
                 const keywordsCSV = await generateKeyWord(question)
                 console.log('Generated keywords:', keywordsCSV)
                 // キーワードをカンマ区切りで分割
@@ -48,7 +46,7 @@ export const useChatStore = defineStore(
                         errorHandler(reason)
                         return []
                     })
-                // 参考情報を取得
+                // キーワードと質問のベクトルから参考情報を取得
                 const memory = await hybridSearchMemory(keywords, vectorQuestion)
                     .catch((reason) => {
                         errorHandler(reason)
@@ -68,8 +66,9 @@ export const useChatStore = defineStore(
                         content: msg.message
                     })
                 } try {
-                    // ストリーミングでチャットメッセージを取得
+                    // 質問・参考情報・チャット履歴を元に回答を作成
                     for await (const chunk of streamChatMessage(question, memory, chatHistory)) {
+                        // 応答をストリーミング出力
                         const prev = this.messageList.get(setId)?.message || ''
                         this.messageList.set(setId, {
                             id: setId,
@@ -95,7 +94,9 @@ export const useChatStore = defineStore(
                 } finally {
                     this.isLoading = false
                 }
-            }, async uploadFile(file: File) {
+            },
+            // 参考情報のアップロード
+            async uploadFile(file: File) {
                 // アップロード用のメッセージバルーンを作成
                 const setId = this.messageList.size + 1
                 const startTime = Date.now()
@@ -107,7 +108,6 @@ export const useChatStore = defineStore(
                     streamingStartTime: startTime,
                     isFileUpload: true
                 })
-
                 try {
                     // ファイルをチャンクに分割
                     const chunks = await chunkFile(file, 500)
