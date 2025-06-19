@@ -115,14 +115,23 @@ export const useChatStore = defineStore(
                             errorHandler(reason)
                             return []
                         })
+                    // セクションごとの連番を管理するMap
+                    const sectionSequenceMap = new Map<string, number>()
                     // チャンク単位でベクトル化し、pgliteに保存
                     for (const chunk of chunks) {
                         console.log('Processing chunk:', chunk.content)
                         const vectorchunk = await generateEmbedding(chunk.content)
                             .catch((reason) => errorHandler(reason))
                         if (vectorchunk) {
-                            await insertMemory(chunk.content, vectorchunk, chunk.filename, chunk.section)
+                            // セクションの連番を取得または初期化
+                            const sectionKey = `${chunk.filename || 'unknown'}_${chunk.section || 'unknown'}`
+                            let sectionSequence = sectionSequenceMap.get(sectionKey) || 0
+                            
+                            await insertMemory(chunk.content, vectorchunk, chunk.filename, chunk.section, sectionSequence)
                                 .catch((reason) => errorHandler(reason))
+                            
+                            // 次回用に連番をインクリメント
+                            sectionSequenceMap.set(sectionKey, sectionSequence + 1)
                         }
                     }// 完了メッセージに更新
                     this.messageList.set(setId, {

@@ -17,12 +17,13 @@ export async function initMemory(dimension: number) {
   // ベクトル検索用の pgvector 拡張を有効化
   await pglite.exec("CREATE EXTENSION IF NOT EXISTS vector;");
   // 検索用 memory テーブルを定義
-  // MEMO：vectorの次元数はモデルに依存する為、使用するモデルに合わせて変える事
+  // MEMO：vectorの次元数はモデルに依存する為、使用するモデルに合わせて変える事  
   await pglite.exec(`
   CREATE TABLE IF NOT EXISTS memory (
     id SERIAL PRIMARY KEY,
     filename TEXT,
     section TEXT,
+    section_sequence INTEGER,
     content TEXT NOT NULL,
     embedding vector('${dimension}')
   );
@@ -30,24 +31,25 @@ export async function initMemory(dimension: number) {
 
 }
 
-export async function insertMemory(content: string, embedding: number[], filename?: string, section?: string) {
+export async function insertMemory(content: string, embedding: number[], filename?: string, section?: string, sectionSequence?: number) {
   const vec = JSON.stringify(embedding);
   // エスケープ処理
   const safeContent = content.replace(/'/g, "''");
   const safeVec = vec.replace(/'/g, "''");
   const safeFilename = filename ? filename.replace(/'/g, "''") : null;
   const safeSection = section ? section.replace(/'/g, "''") : null;
+  const safeSectionSequence = sectionSequence !== undefined ? sectionSequence : null;
 
   // 高速化の為awaitしない なんかあったら戻す
   pglite.exec(
-    `INSERT INTO memory (filename, section, content, embedding) VALUES ('${safeFilename}', '${safeSection}', '${safeContent}', '${safeVec}')`);
+    `INSERT INTO memory (filename, section, section_sequence, content, embedding) VALUES ('${safeFilename}', '${safeSection}', ${safeSectionSequence}, '${safeContent}', '${safeVec}')`);
 }
 
 export async function searchMemory(embedding: number[], limit: number = 3): Promise<any[]> {
   const vec = JSON.stringify(embedding);
   const threshold = 0.3;  // 距離の閾値
   const result = await pglite.query(`
-    SELECT id, filename, section, content, embedding, (embedding <=> '${vec}') AS distance
+    SELECT id, filename, section, section_sequence, content, embedding, (embedding <=> '${vec}') AS distance
     FROM memory
     WHERE (embedding <=> '${vec}') < ${threshold}
     ORDER BY distance
@@ -112,19 +114,19 @@ export async function hybridSearchMemory(keywords: string | string[], embedding:
       ELSE 0
     END + 
     (${vectorWeight} * (1 - (embedding <=> '${vec}')))
-  `;
-  const result = await pglite.query(`
+  `;  const result = await pglite.query(`
     WITH scored_results AS (
       SELECT 
         id, 
         filename,
         section,
+        section_sequence,
         content,
         (embedding <=> '${vec}') AS vector_distance,
         ${combinedScoreExpression} AS combined_score
       FROM memory
     )
-    SELECT id, filename, section, content, vector_distance, combined_score
+    SELECT id, filename, section, section_sequence, content, vector_distance, combined_score
     FROM scored_results
     WHERE combined_score >= ${minCombinedScore}
     ORDER BY combined_score DESC
