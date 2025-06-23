@@ -125,7 +125,7 @@ export const useChatStore = defineStore(
                         if (vectorchunk) {
                             // セクションの連番を取得または初期化
                             const sectionKey = `${chunk.filename || 'unknown'}_${chunk.section || 'unknown'}`
-                            let sectionSequence = sectionSequenceMap.get(sectionKey) || 0
+                            const sectionSequence = sectionSequenceMap.get(sectionKey) || 0
                             
                             await insertMemory(chunk.content, vectorchunk, chunk.filename, chunk.section, sectionSequence)
                                 .catch((reason) => errorHandler(reason))
