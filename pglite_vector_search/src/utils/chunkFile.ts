@@ -83,7 +83,7 @@ async function chunkTxt(text: string, chunkSize: number): Promise<Section[]> {
 async function chunkMd(text: string, chunkSize: number): Promise<SectionWithMetadata[]> {
     // 500文字制限を適用
     const maxChunkSize = Math.min(chunkSize, 500);
-    
+
     const config: ChunkConfig = {
         size: maxChunkSize,
         overlapRatio: 0.15 // 15%のオーバーラップ
@@ -91,7 +91,19 @@ async function chunkMd(text: string, chunkSize: number): Promise<SectionWithMeta
 
     // Markdownテキストを階層構造で解析
     const hierarchicalSections = parseMarkdownHierarchy(text);
-    
+
+    // 見出しが全くない場合の対応
+    if (hierarchicalSections.length === 0 && text.trim()) {
+        hierarchicalSections.push({
+            hierarchy: {
+                level: 1,
+                text: '無題',
+                path: ['無題']
+            },
+            content: text.trim()
+        });
+    }
+
     // 階層構造を考慮してチャンクに分割（文境界優先）
     return createHierarchicalChunksWithSentenceBoundary(hierarchicalSections, config);
 }
@@ -141,14 +153,14 @@ function parseMarkdownHierarchy(text: string): { hierarchy: HeadingHierarchy, co
     const lines = text.split(/\r?\n/);
     const sections: { hierarchy: HeadingHierarchy, content: string }[] = [];
     const hierarchyStack: string[] = []; // 現在の階層パスを保持
-    
+
     let currentContent: string[] = [];
     let currentHierarchy: HeadingHierarchy | null = null;
 
     for (const line of lines) {
         // 見出し行の検出（# ## ### ####など）
         const headingMatch = line.match(/^(#{1,6})\s+(.+)$/);
-        
+
         if (headingMatch) {
             // 前のセクションを保存
             if (currentHierarchy && currentContent.length > 0) {
@@ -187,7 +199,6 @@ function parseMarkdownHierarchy(text: string): { hierarchy: HeadingHierarchy, co
             content: currentContent.join('\n').trim()
         });
     }
-
     // 見出しのないコンテンツがある場合
     if (!currentHierarchy && currentContent.length > 0) {
         const content = currentContent.join('\n').trim();
@@ -217,11 +228,11 @@ function createHierarchicalChunksWithSentenceBoundary(
     for (let i = 0; i < hierarchicalSections.length; i++) {
         const section = hierarchicalSections[i];
         const fullHeading = section.hierarchy.path.map((h, idx) => '#'.repeat(idx + 1) + ' ' + h).join(' > ');
-        
+
         // コンテンツが短い場合はそのまま
         if (section.content.length <= config.size) {
             let content = section.content;
-            
+
             // オーバーラップを追加
             content = addOverlapContext(
                 content,
@@ -266,20 +277,20 @@ function splitContentBySentenceBoundary(
     hierarchy?: HeadingHierarchy
 ): SectionWithMetadata[] {
     const sections: SectionWithMetadata[] = [];
-    
+
     // 段落で分割（改行2つ以上で区切られた部分）
     const paragraphs = content.split(/\n\s*\n/).filter(p => p.trim());
-    
+
     let currentChunk = '';
     let chunkIndex = 0;
-    
+
     for (const paragraph of paragraphs) {
         // 段落内の文を分割（。！？で区切る）
         const sentences = splitIntoSentences(paragraph);
-        
+
         for (const sentence of sentences) {
             const potentialChunk = currentChunk ? `${currentChunk}\n\n${sentence}` : sentence;
-            
+
             // チャンクサイズを超える場合
             if (potentialChunk.length > chunkSize - overlapSize) {
                 // 現在のチャンクを保存
@@ -297,7 +308,7 @@ function splitContentBySentenceBoundary(
                     });
                     chunkIndex++;
                 }
-                
+
                 // 文が単体で制限を超える場合は強制分割
                 if (sentence.length > chunkSize - overlapSize) {
                     const forceSplitChunks = forceSplit(sentence, chunkSize - overlapSize);
@@ -324,7 +335,7 @@ function splitContentBySentenceBoundary(
             }
         }
     }
-    
+
     // 最後のチャンクを保存
     if (currentChunk.trim()) {
         sections.push({
@@ -339,13 +350,13 @@ function splitContentBySentenceBoundary(
             hasOverlap: true
         });
     }
-    
+
     // totalChunkPartsを更新
     const totalParts = sections.length;
     sections.forEach(section => {
         section.totalChunkParts = totalParts;
     });
-    
+
     return sections;
 }
 
@@ -353,12 +364,12 @@ function splitContentBySentenceBoundary(
 function splitIntoSentences(text: string): string[] {
     // 日本語の句読点と英語のピリオドで分割
     const sentences = text.split(/(?<=[。！？.!?])\s*/).filter(s => s.trim());
-    
+
     // 分割結果が空の場合は元のテキストを返す
     if (sentences.length === 0) {
         return [text];
     }
-    
+
     return sentences;
 }
 
@@ -367,11 +378,11 @@ function addSentenceOverlap(content: string, previousSections: SectionWithMetada
     if (previousSections.length === 0 || overlapSize <= 0) {
         return content;
     }
-    
+
     // 前のチャンクの最後の部分を取得
     const prevContent = previousSections[previousSections.length - 1].content;
     const sentences = splitIntoSentences(prevContent);
-    
+
     // 前のチャンクから適切な量のオーバーラップを追加
     let overlap = '';
     for (let i = sentences.length - 1; i >= 0; i--) {
@@ -381,11 +392,11 @@ function addSentenceOverlap(content: string, previousSections: SectionWithMetada
             break;
         }
     }
-    
+
     if (overlap.trim()) {
         return `...${overlap}\n\n${content}`;
     }
-    
+
     return content;
 }
 
@@ -393,13 +404,13 @@ function addSentenceOverlap(content: string, previousSections: SectionWithMetada
 function forceSplit(text: string, maxSize: number): string[] {
     const chunks: string[] = [];
     let currentPos = 0;
-    
+
     while (currentPos < text.length) {
         const chunk = text.slice(currentPos, currentPos + maxSize);
         chunks.push(chunk);
         currentPos += maxSize;
     }
-    
+
     return chunks;
 }
 
@@ -411,7 +422,7 @@ function addOverlapContext(
     overlapSize: number
 ): string {
     let result = content;
-    
+
     // 前のセクションからコンテキストを追加
     if (currentIndex > 0 && overlapSize > 0) {
         const prevContent = allSections[currentIndex - 1].content;
@@ -420,7 +431,7 @@ function addOverlapContext(
             result = `...${prevOverlap}\n\n${result}`;
         }
     }
-    
+
     // 次のセクションからコンテキストを追加
     if (currentIndex < allSections.length - 1 && overlapSize > 0) {
         const nextContent = allSections[currentIndex + 1].content;
@@ -429,7 +440,7 @@ function addOverlapContext(
             result = `${result}\n\n${nextOverlap}...`;
         }
     }
-    
+
     return result;
 }
 
@@ -447,7 +458,7 @@ function splitLongContentWithOverlap(
 
     for (let i = 0; i < lines.length; i++) {
         const line = lines[i];
-        
+
         if (currentChunk.length + line.length + 1 > chunkSize - overlapSize) {
             // チャンクサイズに達した場合
             if (currentChunk.trim()) {
@@ -457,7 +468,7 @@ function splitLongContentWithOverlap(
                 });
                 chunkIndex++;
             }
-            
+
             // 次のチャンクを開始（オーバーラップを考慮）
             const overlapLines = currentChunk.split('\n').slice(-Math.floor(overlapSize / 50)); // 概算でオーバーラップ行数を計算
             currentChunk = overlapLines.join('\n') + (overlapLines.length > 0 ? '\n' : '') + line;
