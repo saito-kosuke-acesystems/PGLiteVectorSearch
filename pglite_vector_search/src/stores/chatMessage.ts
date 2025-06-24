@@ -35,19 +35,14 @@ export const useChatStore = defineStore(
                     isStreaming: true,
                     streamingStartTime: startTime
                 })
-                // 質問をセグメント化し、キーワードを作成
-                const keywordsCSV = await generateKeyWord(question)
-                console.log('Generated keywords:', keywordsCSV)
-                // キーワードをカンマ区切りで分割
-                const keywords = keywordsCSV.split(',').map(k => k.trim().replace(/^"|"$/g, ''))
                 // 質問をベクトル化
                 const vectorQuestion = await generateEmbedding(question)
                     .catch((reason) => {
                         errorHandler(reason)
                         return []
                     })
-                // キーワードと質問のベクトルから参考情報を取得
-                const memory = await hybridSearchMemory(keywords, vectorQuestion)
+                // 参考情報を取得
+                const memory = await searchMemory(vectorQuestion)
                     .catch((reason) => {
                         errorHandler(reason)
                         return []
