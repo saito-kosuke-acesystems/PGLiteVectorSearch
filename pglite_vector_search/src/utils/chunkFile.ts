@@ -155,9 +155,7 @@ function parseMarkdownHierarchy(text: string): { hierarchy: HeadingHierarchy, co
     const hierarchyStack: string[] = []; // 現在の階層パスを保持
 
     let currentContent: string[] = [];
-    let currentHierarchy: HeadingHierarchy | null = null;
-
-    for (const line of lines) {
+    let currentHierarchy: HeadingHierarchy | null = null;    for (const line of lines) {
         // 見出し行の検出（# ## ### ####など）
         const headingMatch = line.match(/^(#{1,6})\s+(.+)$/);
 
@@ -188,6 +186,15 @@ function parseMarkdownHierarchy(text: string): { hierarchy: HeadingHierarchy, co
             currentContent = [];
         } else {
             // コンテンツ行
+            // 見出しが設定されていない状態で初めてコンテンツが見つかった場合、デフォルト見出しを設定
+            if (!currentHierarchy && line.trim()) {
+                hierarchyStack[0] = '無題';
+                currentHierarchy = {
+                    level: 1,
+                    text: '無題',
+                    path: ['無題']
+                };
+            }
             currentContent.push(line);
         }
     }
@@ -199,7 +206,8 @@ function parseMarkdownHierarchy(text: string): { hierarchy: HeadingHierarchy, co
             content: currentContent.join('\n').trim()
         });
     }
-    // 見出しのないコンテンツがある場合
+
+    // md内に見出しが全くない場合の対応
     if (!currentHierarchy && currentContent.length > 0) {
         const content = currentContent.join('\n').trim();
         if (content) {
