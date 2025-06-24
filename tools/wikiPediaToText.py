@@ -7,7 +7,7 @@ import re
 # 日本語版ウィキペからテキストデータを取得するスクリプト
 
 URL = "https://ja.wikipedia.org/w/api.php"
-title = "機動戦士Gundam_GQuuuuuuX"
+title = "クロード・モネ"
 
 PARAMS = {
     "action": "parse",
@@ -32,12 +32,15 @@ markdown = re.sub(r'!\[.*?\]\(.*?\)', '', markdown, flags=re.DOTALL)
 # 通常のリンクをテキスト化
 markdown = re.sub(r'\[([^\]]+)\]\([^)]+\)', r'\1', markdown, flags=re.DOTALL)
 
+# タイトルを大見出しとして先頭に追加
+markdown = f"# {title}\n\n" + markdown
+
 # ファイル保存例
 dir = "./download"
 if not os.path.exists(dir):
     # 無かったら作成
     os.makedirs(dir)
-with open(dir + "/" + title +"_2.md", "w", encoding="utf-8") as f:
+with open(dir + "/" + title +".md", "w", encoding="utf-8") as f:
     f.write(markdown)
 
 print(markdown)
