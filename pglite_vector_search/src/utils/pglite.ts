@@ -55,7 +55,6 @@ export async function insertMemory(
   filename?: string,
   section?: string,
   sectionSequence?: number,
-  // chunkMd関連の新しいパラメータ
   headingLevel?: number,
   headingPath?: string[],
   headingText?: string,
@@ -65,17 +64,16 @@ export async function insertMemory(
   parentSectionId?: number
 ) {
   const vec = JSON.stringify(embedding);
-  
+
   // エスケープ処理
   const safeContent = content.replace(/'/g, "''");
   const safeVec = vec.replace(/'/g, "''");
   const safeFilename = filename ? `'${filename.replace(/'/g, "''")}'` : 'NULL';
   const safeSection = section ? `'${section.replace(/'/g, "''")}'` : 'NULL';
   const safeSectionSequence = sectionSequence !== undefined ? sectionSequence : 'NULL';
-    // 新しいフィールドの処理
   const safeHeadingLevel = headingLevel !== undefined ? headingLevel : 'NULL';
-  const safeHeadingPath = headingPath && headingPath.length > 0 
-    ? `ARRAY[${headingPath.filter(p => p != null).map(p => `'${String(p).replace(/'/g, "''")}'`).join(',')}]` 
+  const safeHeadingPath = headingPath && headingPath.length > 0
+    ? `ARRAY[${headingPath.filter(p => p != null).map(p => `'${String(p).replace(/'/g, "''")}'`).join(',')}]`
     : 'NULL';
   const safeHeadingText = headingText ? `'${headingText.replace(/'/g, "''")}'` : 'NULL';
   const safeChunkPartNumber = chunkPartNumber !== undefined ? chunkPartNumber : 'NULL';
@@ -99,7 +97,7 @@ export async function insertMemory(
 export async function searchMemory(embedding: number[], limit: number = 3): Promise<any[]> {
   const vec = JSON.stringify(embedding);
   const threshold = 0.4;  // 距離の閾値（少し緩める）
-  
+
   // 階層重み付け、コンテキスト統合、重複排除を含む高精度ベクトル検索
   const result = await pglite.query(`
     WITH ranked_results AS (
@@ -187,10 +185,10 @@ export async function searchMemory(embedding: number[], limit: number = 3): Prom
     FROM deduplicated_results
     ORDER BY final_score ASC
     LIMIT ${limit * 2};`);  // 多めに取得して後で精査
-  
+
   // 結果の後処理：関連するチャンクパーツの統合
   const processedResults = await enhanceResultsWithContext(result.rows, limit);
-  
+
   return processedResults;
 }
 
@@ -198,17 +196,17 @@ export async function searchMemory(embedding: number[], limit: number = 3): Prom
 async function enhanceResultsWithContext(results: any[], limit: number): Promise<any[]> {
   const enhancedResults = [];
   const processedSections = new Set();
-  
+
   for (const result of results) {
     const sectionKey = `${result.filename}-${result.heading_path?.join('/')}-${result.heading_text}`;
-    
+
     // 既に処理済みのセクションはスキップ
     if (processedSections.has(sectionKey)) {
       continue;
     }
-    
+
     processedSections.add(sectionKey);
-    
+
     // 分割されたチャンクの場合、関連パーツを取得
     if (result.total_chunk_parts > 1) {
       const relatedParts = await getRelatedChunkParts(
@@ -216,10 +214,10 @@ async function enhanceResultsWithContext(results: any[], limit: number): Promise
         result.heading_path,
         result.heading_text
       );
-      
+
       // パーツを統合したコンテンツを作成
       const integratedContent = integrateChunkParts(relatedParts);
-      
+
       enhancedResults.push({
         ...result,
         content: integratedContent,
@@ -232,13 +230,13 @@ async function enhanceResultsWithContext(results: any[], limit: number): Promise
     } else {
       enhancedResults.push(result);
     }
-    
+
     // 指定された制限に達したら終了
     if (enhancedResults.length >= limit) {
       break;
     }
   }
-  
+
   return enhancedResults;
 }
 
@@ -246,7 +244,7 @@ async function enhanceResultsWithContext(results: any[], limit: number): Promise
 async function getRelatedChunkParts(filename: string, headingPath: string[], headingText: string): Promise<any[]> {
   const safeFilename = filename.replace(/'/g, "''");
   const safeHeadingText = headingText ? `'${headingText.replace(/'/g, "''")}'` : 'NULL';
-  
+
   // heading_pathがNULLまたは空配列の場合とそうでない場合で条件を分ける
   let headingPathCondition = '';
   if (!headingPath || headingPath.length === 0) {
@@ -255,7 +253,7 @@ async function getRelatedChunkParts(filename: string, headingPath: string[], hea
     const safeHeadingPath = `ARRAY[${headingPath.map(p => `'${String(p).replace(/'/g, "''")}'`).join(',')}]`;
     headingPathCondition = `heading_path = ${safeHeadingPath}`;
   }
-  
+
   // heading_textのNULL比較も修正
   let headingTextCondition = '';
   if (!headingText) {
@@ -263,7 +261,7 @@ async function getRelatedChunkParts(filename: string, headingPath: string[], hea
   } else {
     headingTextCondition = `heading_text = ${safeHeadingText}`;
   }
-  
+
   const result = await pglite.query(`
     SELECT id, content, chunk_part_number, total_chunk_parts, has_overlap
     FROM memory
@@ -272,7 +270,7 @@ async function getRelatedChunkParts(filename: string, headingPath: string[], hea
       AND ${headingTextCondition}
     ORDER BY chunk_part_number ASC;
   `);
-  
+
   return result.rows;
 }
 
@@ -281,19 +279,19 @@ function integrateChunkParts(parts: any[]): string {
   if (parts.length <= 1) {
     return parts[0]?.content || '';
   }
-  
+
   let integratedContent = '';
-  
+
   for (let i = 0; i < parts.length; i++) {
     const part = parts[i];
     let partContent = part.content;
-    
+
     // オーバーラップ部分の重複を除去
     if (i > 0 && part.has_overlap) {
       // 前のパーツとの重複部分を検出して除去
       partContent = removeOverlapWithPrevious(partContent, integratedContent);
     }
-    
+
     // パーツを統合
     if (i === 0) {
       integratedContent = partContent;
@@ -301,11 +299,11 @@ function integrateChunkParts(parts: any[]): string {
       integratedContent += '\n\n' + partContent;
     }
   }
-  
+
   return integratedContent;
 }
 
-// オーバーラップ部分を除去する関数（改善版：マーカーに依存しない）
+// オーバーラップ部分を除去する関数
 function removeOverlapWithPrevious(currentContent: string, previousContent: string): string {
   if (!previousContent || !currentContent) {
     return currentContent;
@@ -313,12 +311,12 @@ function removeOverlapWithPrevious(currentContent: string, previousContent: stri
 
   // 前のコンテンツの末尾と現在のコンテンツの先頭で重複を検出
   const overlap = findOverlapBetweenTexts(previousContent, currentContent);
-  
+
   if (overlap.length > 0) {
     // 重複部分を除去
     return currentContent.substring(overlap.length).trim();
   }
-  
+
   return currentContent;
 }
 
@@ -395,9 +393,9 @@ function calculateSimilarity(text1: string, text2: string): number {
   // 共通要素の数を計算（Array.fromを使用してSetを配列に変換）
   const words1Array = Array.from(words1);
   const words2Array = Array.from(words2);
-  
+
   const intersection = words1Array.filter(word => words2.has(word));
-  
+
   // 和集合の数を計算
   const unionSet = new Set();
   words1Array.forEach(word => unionSet.add(word));
@@ -475,12 +473,12 @@ function splitIntoSentences(text: string): string[] {
 //     CASE
 //       WHEN ${keywordCondition} THEN ${keywordScoreExpression}
 //       ELSE 0
-//     END + 
+//     END +
 //     (${vectorWeight} * (1 - (embedding <=> '${vec}')))
 //   `;  const result = await pglite.query(`
 //     WITH scored_results AS (
-//       SELECT 
-//         id, 
+//       SELECT
+//         id,
 //         filename,
 //         section,
 //         section_sequence,
