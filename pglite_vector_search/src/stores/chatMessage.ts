@@ -42,7 +42,7 @@ export const useChatStore = defineStore(
                         return []
                     })
                 // 参考情報を取得
-                const memory = await searchMemory(vectorQuestion)
+                const memory = await searchMemory(vectorQuestion, 3)
                     .catch((reason) => {
                         errorHandler(reason)
                         return []

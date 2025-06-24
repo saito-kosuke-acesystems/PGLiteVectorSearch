@@ -1,5 +1,13 @@
 import { OpenAI } from 'openai';
 import { setOllamaConfig, generateKeyWord as ollamaGenerateKeyWord, streamChatMessage as ollamaStreamChatMessage, generateEmbedding as ollamaGenerateEmbedding, getDimension as ollamaGetDimension } from '@/utils/ollamaAPI';
+import {
+    selectOptimalContext,
+    setContextSelectionConfig,
+    getContextSelectionConfig,
+    adjustContextForPerformance,
+    type ContextSelectionConfig,
+    type SelectedContext
+} from '@/utils/optimalContext';
 
 // baseURL, chatModel, embeddingModelを外部からセットできるようにする
 let openai: OpenAI | null = null;
@@ -78,38 +86,37 @@ export async function generateKeyWord(userMessage: string): Promise<string> {
 export async function* streamChatMessage(userMessage: string, memory: any[], chatHistory: any[] = []): AsyncGenerator<string> {
     try {
         if (!openai) throw new Error('OpenAIクライアントが初期化されていません');
-        
-        // 参考ファイル名を取得（重複を除く）
-        const referenceFiles = memory.length > 0 ? 
-            Array.from(new Set(memory.filter(m => m.filename).map(m => m.filename))) : [];
-        
-        // チャット履歴を考慮したシステムプロンプト
-        let systemPrompt = '';
-        if (memory.length > 0) {
-            systemPrompt = `与えられた参考情報を使用してユーザの質問に答えてください。
-            ・質問と直接一致する情報がない場合でも、質問の意図や類似した概念に関連する情報を探して回答してください。
-            ・回答に推測や仮定を含めないでください。
-            ・過去の会話履歴がある場合は、その内容を考慮して文脈に沿った適切な回答をしてください。
-            ・参考情報はすでに関連性が高い順に並べられています。
-            
-            参考情報：\n${memory.map(m => m.content).join('\n')}`;
-        } else {
-            systemPrompt = 'ユーザの質問に答えてください。';
-        }
+
+        // 階層型コンテキスト選別を実行
+        const selectedContext = selectOptimalContext(memory, userMessage);
+
+        // 参考ファイル名を取得（選別されたコンテキストから）
+        const referenceFiles = selectedContext.length > 0 ?
+            Array.from(new Set(
+                memory.filter(m => selectedContext.some(ctx => ctx.content === m.content))
+                    .map(m => m.filename)
+                    .filter(f => f)
+            )) : [];
+
+        // 最適化されたシステムプロンプト生成
+        const systemPrompt = generateOptimizedSystemPrompt(selectedContext, userMessage);
+
+        console.log('Original memory count:', memory.length);
+        console.log('Selected context count:', selectedContext.length);
+        console.log('Total tokens estimated:', selectedContext.reduce((sum, ctx) => sum + ctx.tokenCount, 0));
+        console.log('systemPrompt:', systemPrompt);
 
         // メッセージ履歴を構築（システム→履歴→現在の質問の順）
         const messages = [
             { role: 'system', content: systemPrompt },
             ...chatHistory,
             { role: 'user', content: userMessage }
-        ];
-
-        if (useOllamaAPI) {
+        ]; if (useOllamaAPI) {
             // Ollama APIを使用
             for await (const chunk of ollamaStreamChatMessage(userMessage, memory, systemPrompt, chatHistory)) {
                 yield chunk;
             }
-            // 回答の最後に参考ファイル名を追加
+            // 回答の最後に参考ファイル名と最適化情報を追加
             if (referenceFiles.length > 0) {
                 yield `\n\n【参考ファイル】\n${referenceFiles.join(', ')}`;
             }
@@ -126,8 +133,7 @@ export async function* streamChatMessage(userMessage: string, memory: any[], cha
             const content = chunk.choices?.[0]?.delta?.content;
             if (content) yield content;
         }
-        
-        // 回答の最後に参考ファイル名を追加
+        // 回答の最後に参考ファイル名と最適化情報を追加
         if (referenceFiles.length > 0) {
             yield `\n\n【参考ファイル】\n${referenceFiles.join(', ')}`;
         }
@@ -135,6 +141,40 @@ export async function* streamChatMessage(userMessage: string, memory: any[], cha
         console.error('Error streaming chat message:', error);
         throw error;
     }
+}
+
+/**
+ * 最適化されたシステムプロンプト生成
+ * 選別されたコンテキストから効果的なシステムプロンプトを生成
+ * 
+ * @param selectedContext 選別されたコンテキスト
+ * @param userMessage ユーザーの質問
+ * @returns 最適化されたシステムプロンプト
+ */
+function generateOptimizedSystemPrompt(
+    selectedContext: SelectedContext[],
+    userMessage: string
+): string {
+    if (selectedContext.length === 0) {
+        return 'ユーザの質問に答えてください。参考情報はありません。';
+    }
+
+    // コンテキストを関連性順に整理
+    const sortedContext = selectedContext
+        .sort((a, b) => b.relevanceScore - a.relevanceScore)
+        .map(ctx => ctx.content)
+        .join('\n---\n');
+
+    return `以下の厳選された参考情報を基に、ユーザの質問に正確に答えてください。
+
+【重要事項】
+・参考情報は関連性が高い順に整理されています
+・質問に直接関連する情報を優先して使用してください
+・情報が不足している場合は、その旨を明記してください
+・推測や憶測は避け、根拠のある回答をしてください
+
+【参考情報】
+${sortedContext}`;
 }
 
 export async function generateEmbedding(userMessage: string): Promise<number[]> {
@@ -185,6 +225,14 @@ export function getCurrentConfig() {
         baseURL: currentBaseURL,
         chatModel: currentChatModel,
         embeddingModel: currentEmbeddingModel,
-        useOllamaAPI: useOllamaAPI
+        useOllamaAPI: useOllamaAPI,
+        contextSelection: getContextSelectionConfig()
     };
 }
+
+// 再エクスポート（optimalContext.tsの関数を外部に公開）
+export {
+    setContextSelectionConfig,
+    getContextSelectionConfig,
+    adjustContextForPerformance
+} from '@/utils/optimalContext';
