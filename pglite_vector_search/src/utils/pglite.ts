@@ -16,7 +16,7 @@ export async function initMemory(dimension: number) {
 
   // ベクトル検索用の pgvector 拡張を有効化
   await pglite.exec("CREATE EXTENSION IF NOT EXISTS vector;");
-  // 検索用 memory テーブルを定義
+  // 検索用 memory テーブルを定義（chunkMd最適化版）
   // MEMO：vectorの次元数はモデルに依存する為、使用するモデルに合わせて変える事  
   await pglite.exec(`
   CREATE TABLE IF NOT EXISTS memory (
@@ -25,24 +25,75 @@ export async function initMemory(dimension: number) {
     section TEXT,
     section_sequence INTEGER,
     content TEXT NOT NULL,
-    embedding vector('${dimension}')
+    embedding vector('${dimension}'),
+    -- chunkMd情報の追加
+    heading_level INTEGER,           -- 見出しレベル（1-6）
+    heading_path TEXT[],            -- 階層パス配列
+    heading_text TEXT,              -- 現在の見出しテキスト
+    chunk_part_number INTEGER,      -- チャンクのパート番号（分割された場合）
+    total_chunk_parts INTEGER,      -- 総チャンク数（分割された場合）
+    has_overlap BOOLEAN DEFAULT false, -- オーバーラップコンテキストを含むか
+    parent_section_id INTEGER,      -- 親セクションのID（階層関係）
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
   );
-  CREATE INDEX ON memory USING hnsw (embedding vector_cosine_ops);`);
+  
+  -- インデックス作成
+  CREATE INDEX ON memory USING hnsw (embedding vector_cosine_ops);
+  CREATE INDEX ON memory (filename);
+  CREATE INDEX ON memory (heading_level);
+  CREATE INDEX ON memory (heading_path);
+  CREATE INDEX ON memory (section_sequence);
+  CREATE INDEX ON memory (parent_section_id);`);
 
 }
 
-export async function insertMemory(content: string, embedding: number[], filename?: string, section?: string, sectionSequence?: number) {
+// chunkMd情報を含む拡張insertMemory関数
+export async function insertMemory(
+  content: string,
+  embedding: number[],
+  filename?: string,
+  section?: string,
+  sectionSequence?: number,
+  // chunkMd関連の新しいパラメータ
+  headingLevel?: number,
+  headingPath?: string[],
+  headingText?: string,
+  chunkPartNumber?: number,
+  totalChunkParts?: number,
+  hasOverlap?: boolean,
+  parentSectionId?: number
+) {
   const vec = JSON.stringify(embedding);
+  
   // エスケープ処理
   const safeContent = content.replace(/'/g, "''");
   const safeVec = vec.replace(/'/g, "''");
-  const safeFilename = filename ? filename.replace(/'/g, "''") : null;
-  const safeSection = section ? section.replace(/'/g, "''") : null;
-  const safeSectionSequence = sectionSequence !== undefined ? sectionSequence : null;
+  const safeFilename = filename ? `'${filename.replace(/'/g, "''")}'` : 'NULL';
+  const safeSection = section ? `'${section.replace(/'/g, "''")}'` : 'NULL';
+  const safeSectionSequence = sectionSequence !== undefined ? sectionSequence : 'NULL';
+    // 新しいフィールドの処理
+  const safeHeadingLevel = headingLevel !== undefined ? headingLevel : 'NULL';
+  const safeHeadingPath = headingPath && headingPath.length > 0 
+    ? `ARRAY[${headingPath.filter(p => p != null).map(p => `'${String(p).replace(/'/g, "''")}'`).join(',')}]` 
+    : 'NULL';
+  const safeHeadingText = headingText ? `'${headingText.replace(/'/g, "''")}'` : 'NULL';
+  const safeChunkPartNumber = chunkPartNumber !== undefined ? chunkPartNumber : 'NULL';
+  const safeTotalChunkParts = totalChunkParts !== undefined ? totalChunkParts : 'NULL';
+  const safeHasOverlap = hasOverlap !== undefined ? hasOverlap : 'false';
+  const safeParentSectionId = parentSectionId !== undefined ? parentSectionId : 'NULL';
 
   // 高速化の為awaitしない なんかあったら戻す
-  pglite.exec(
-    `INSERT INTO memory (filename, section, section_sequence, content, embedding) VALUES ('${safeFilename}', '${safeSection}', ${safeSectionSequence}, '${safeContent}', '${safeVec}')`);
+  pglite.exec(`
+    INSERT INTO memory (
+      filename, section, section_sequence, content, embedding,
+      heading_level, heading_path, heading_text, 
+      chunk_part_number, total_chunk_parts, has_overlap, parent_section_id
+    ) VALUES (
+      ${safeFilename}, ${safeSection}, ${safeSectionSequence}, '${safeContent}', '${safeVec}',
+      ${safeHeadingLevel}, ${safeHeadingPath}, ${safeHeadingText},
+      ${safeChunkPartNumber}, ${safeTotalChunkParts}, ${safeHasOverlap}, ${safeParentSectionId}
+    )`);
 }
 
 export async function searchMemory(embedding: number[], limit: number = 3): Promise<any[]> {

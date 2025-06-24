@@ -2,7 +2,7 @@ import { defineStore } from 'pinia'
 import { MessageData, SendMessage, State } from '@/models/chatMessage'
 import { generateKeyWord, streamChatMessage, generateEmbedding } from '@/utils/openAI'
 import { insertMemory, searchMemory, hybridSearchMemory } from '@/utils/pglite'
-import { chunkFile } from '@/utils/chunkFile'
+import { chunkFile, ChunkResult } from '@/utils/chunkFile'
 import { extractKeywords } from '@/utils/segment'
 
 export const useChatStore = defineStore(
@@ -116,8 +116,7 @@ export const useChatStore = defineStore(
                             return []
                         })
                     // セクションごとの連番を管理するMap
-                    const sectionSequenceMap = new Map<string, number>()
-                    // チャンク単位でベクトル化し、pgliteに保存
+                    const sectionSequenceMap = new Map<string, number>()                    // チャンク単位でベクトル化し、pgliteに保存
                     for (const chunk of chunks) {
                         console.log('Processing chunk:', chunk.content)
                         const vectorchunk = await generateEmbedding(chunk.content)
@@ -127,8 +126,21 @@ export const useChatStore = defineStore(
                             const sectionKey = `${chunk.filename || 'unknown'}_${chunk.section || 'unknown'}`
                             const sectionSequence = sectionSequenceMap.get(sectionKey) || 0
                             
-                            await insertMemory(chunk.content, vectorchunk, chunk.filename, chunk.section, sectionSequence)
-                                .catch((reason) => errorHandler(reason))
+                            // 拡張されたinsertMemoryを使用してchunkMd情報を含めて保存
+                            await insertMemory(
+                                chunk.content, 
+                                vectorchunk, 
+                                chunk.filename, 
+                                chunk.section, 
+                                sectionSequence,
+                                // chunkMd関連の新しいパラメータ
+                                chunk.headingLevel,
+                                chunk.headingPath,
+                                chunk.headingText,
+                                chunk.chunkPartNumber,
+                                chunk.totalChunkParts,
+                                chunk.hasOverlap
+                            ).catch((reason) => errorHandler(reason))
                             
                             // 次回用に連番をインクリメント
                             sectionSequenceMap.set(sectionKey, sectionSequence + 1)
