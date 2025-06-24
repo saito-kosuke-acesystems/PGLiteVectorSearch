@@ -1,12 +1,7 @@
 // セクションの型定義
-interface Section {
+interface SectionWithMetadata {
     heading: string;
     content: string;
-}
-
-// セクションの型定義（拡張版）
-interface SectionWithMetadata extends Section {
-    // chunkMd関連の階層情報
     headingLevel?: number;
     headingPath?: string[];
     headingText?: string;
@@ -33,7 +28,6 @@ export interface ChunkResult {
     section: string;
     content: string;
     filename: string;
-    // chunkMd関連の階層情報
     headingLevel?: number;
     headingPath?: string[];
     headingText?: string;
@@ -42,10 +36,10 @@ export interface ChunkResult {
     hasOverlap?: boolean;
 }
 
-export async function chunkFile(file: File, chunkSize: number = 1000): Promise<ChunkResult[]> {    // 拡張子別にファイルを処理
+export async function chunkFile(file: File, chunkSize: number = 1000): Promise<ChunkResult[]> {    
+    // 拡張子別にファイルを処理
     const ext = file.name.split('.').pop()?.toLowerCase()
-    let text: string;
-    let sections: (Section | SectionWithMetadata)[] = [];
+    let text: string; let sections: SectionWithMetadata[] = [];
     switch (ext) {
         case 'txt':
             text = await file.text();
@@ -58,34 +52,45 @@ export async function chunkFile(file: File, chunkSize: number = 1000): Promise<C
         default:
             // 例外をスロー
             throw new Error('対応していないファイル形式です。: ' + ext);
-    }
-
+    }    
     // セクションとファイル名のペアを返す
     return sections.map(section => ({
         section: section.heading,
         content: section.content,
         filename: file.name,
-        // SectionWithMetadataの場合は階層情報も含める
-        headingLevel: 'headingLevel' in section ? section.headingLevel : undefined,
-        headingPath: 'headingPath' in section ? section.headingPath : undefined,
-        headingText: 'headingText' in section ? section.headingText : undefined,
-        chunkPartNumber: 'chunkPartNumber' in section ? section.chunkPartNumber : undefined,
-        totalChunkParts: 'totalChunkParts' in section ? section.totalChunkParts : undefined,
-        hasOverlap: 'hasOverlap' in section ? section.hasOverlap : undefined
+        headingLevel: section.headingLevel,
+        headingPath: section.headingPath,
+        headingText: section.headingText,
+        chunkPartNumber: section.chunkPartNumber,
+        totalChunkParts: section.totalChunkParts,
+        hasOverlap: section.hasOverlap
     }));
 }
 
-async function chunkTxt(text: string, chunkSize: number): Promise<Section[]> {
-    // splitLongContentを使用してテキストを分割
-    return splitLongContent('# 無題', text, chunkSize);
+async function chunkTxt(text: string, chunkSize: number): Promise<SectionWithMetadata[]> {
+    const config: ChunkConfig = {
+        size: chunkSize,
+        overlapRatio: 0.15 // 15%のオーバーラップ
+    };
+
+    // txtファイルを単一の階層構造として扱う
+    const hierarchicalSections = [{
+        hierarchy: {
+            level: 1,
+            text: '無題',
+            path: ['無題']
+        },
+        content: text.trim()
+    }];
+
+    // 階層構造を考慮してチャンクに分割（文境界優先）
+    return createHierarchicalChunksWithSentenceBoundary(hierarchicalSections, config);
 }
 
 async function chunkMd(text: string, chunkSize: number): Promise<SectionWithMetadata[]> {
-    // 500文字制限を適用
-    const maxChunkSize = Math.min(chunkSize, 500);
 
     const config: ChunkConfig = {
-        size: maxChunkSize,
+        size: chunkSize,
         overlapRatio: 0.15 // 15%のオーバーラップ
     };
 
@@ -108,46 +113,6 @@ async function chunkMd(text: string, chunkSize: number): Promise<SectionWithMeta
     return createHierarchicalChunksWithSentenceBoundary(hierarchicalSections, config);
 }
 
-// 長いコンテンツを指定されたサイズで分割する関数
-function splitLongContent(heading: string, content: string, chunkSize: number): Section[] {
-    if (content.length <= chunkSize) {
-        return [{
-            heading: heading,
-            content: content
-        }];
-    }
-
-    const sections: Section[] = [];
-    const lines = content.split('\n');
-    let currentChunk = '';
-
-    for (const line of lines) {
-        if (currentChunk.length + line.length + 1 > chunkSize) {
-            // 現在のチャンクがchunkSizeを超える場合、チャンクを保存
-            if (currentChunk.trim()) {
-                sections.push({
-                    heading: heading,
-                    content: currentChunk.trim()
-                });
-            }
-            currentChunk = line; // 新しいチャンクを開始
-        } else {
-            // 現在のチャンクに行を追加
-            currentChunk += (currentChunk ? '\n' : '') + line;
-        }
-    }
-
-    // 最後のチャンクを保存
-    if (currentChunk.trim()) {
-        sections.push({
-            heading: heading,
-            content: currentChunk.trim()
-        });
-    }
-
-    return sections;
-}
-
 // Markdownテキストを階層構造で解析する関数
 function parseMarkdownHierarchy(text: string): { hierarchy: HeadingHierarchy, content: string }[] {
     const lines = text.split(/\r?\n/);
@@ -155,7 +120,7 @@ function parseMarkdownHierarchy(text: string): { hierarchy: HeadingHierarchy, co
     const hierarchyStack: string[] = []; // 現在の階層パスを保持
 
     let currentContent: string[] = [];
-    let currentHierarchy: HeadingHierarchy | null = null;    for (const line of lines) {
+    let currentHierarchy: HeadingHierarchy | null = null; for (const line of lines) {
         // 見出し行の検出（# ## ### ####など）
         const headingMatch = line.match(/^(#{1,6})\s+(.+)$/);
 
@@ -172,7 +137,8 @@ function parseMarkdownHierarchy(text: string): { hierarchy: HeadingHierarchy, co
             const headingText = headingMatch[2].trim();
 
             // 階層スタックを更新
-            hierarchyStack.splice(level - 1); // 現在のレベル以下をクリア
+            hierarchyStack.splice(level - 1); 
+            // 現在のレベル以下をクリア
             hierarchyStack[level - 1] = headingText;
 
             // 現在の階層パスを作成
@@ -452,46 +418,3 @@ function addOverlapContext(
     return result;
 }
 
-// オーバーラップを考慮した長いコンテンツ分割関数
-function splitLongContentWithOverlap(
-    heading: string,
-    content: string,
-    chunkSize: number,
-    overlapSize: number
-): Section[] {
-    const sections: Section[] = [];
-    const lines = content.split('\n');
-    let currentChunk = '';
-    let chunkIndex = 0;
-
-    for (let i = 0; i < lines.length; i++) {
-        const line = lines[i];
-
-        if (currentChunk.length + line.length + 1 > chunkSize - overlapSize) {
-            // チャンクサイズに達した場合
-            if (currentChunk.trim()) {
-                sections.push({
-                    heading: `${heading} (Part ${chunkIndex + 1})`,
-                    content: currentChunk.trim()
-                });
-                chunkIndex++;
-            }
-
-            // 次のチャンクを開始（オーバーラップを考慮）
-            const overlapLines = currentChunk.split('\n').slice(-Math.floor(overlapSize / 50)); // 概算でオーバーラップ行数を計算
-            currentChunk = overlapLines.join('\n') + (overlapLines.length > 0 ? '\n' : '') + line;
-        } else {
-            currentChunk += (currentChunk ? '\n' : '') + line;
-        }
-    }
-
-    // 最後のチャンク
-    if (currentChunk.trim()) {
-        sections.push({
-            heading: chunkIndex > 0 ? `${heading} (Part ${chunkIndex + 1})` : heading,
-            content: currentChunk.trim()
-        });
-    }
-
-    return sections;
-}
