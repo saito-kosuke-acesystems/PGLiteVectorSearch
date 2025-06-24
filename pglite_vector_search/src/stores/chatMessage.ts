@@ -1,7 +1,7 @@
 import { defineStore } from 'pinia'
 import { MessageData, SendMessage, State } from '@/models/chatMessage'
 import { generateKeyWord, streamChatMessage, generateEmbedding } from '@/utils/openAI'
-import { insertMemory, searchMemory, hybridSearchMemory } from '@/utils/pglite'
+import { insertMemory, searchMemory } from '@/utils/pglite'
 import { chunkFile, ChunkResult } from '@/utils/chunkFile'
 import { extractKeywords } from '@/utils/segment'
 
