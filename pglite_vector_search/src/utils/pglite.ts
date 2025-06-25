@@ -159,12 +159,7 @@ export async function searchMemory(embedding: number[], limit: number = 3): Prom
         parent_section_id,
         base_distance,
         final_score,
-        -- 同一セクションの他パーツの情報を統合
-        CASE 
-          WHEN total_chunk_parts > 1 THEN 
-            content || E'\n\n[このセクションは' || total_chunk_parts || '個のパートに分割されています - Part ' || chunk_part_number || ']'
-          ELSE content
-        END AS enhanced_content
+        content AS enhanced_content
       FROM weighted_results
       ORDER BY filename, heading_path, heading_text, final_score ASC
     )
@@ -184,12 +179,15 @@ export async function searchMemory(embedding: number[], limit: number = 3): Prom
       has_overlap
     FROM deduplicated_results
     ORDER BY final_score ASC
-    LIMIT ${limit * 2};`);  // 多めに取得して後で精査
+    LIMIT ${limit};`);
 
-  // 結果の後処理：関連するチャンクパーツの統合
-  const processedResults = await enhanceResultsWithContext(result.rows, limit);
+    // チャンクパーツを統合せずに結果を返す
+  return result.rows;
 
-  return processedResults;
+  // // 結果の後処理：関連するチャンクパーツの統合
+  // const processedResults = await enhanceResultsWithContext(result.rows, limit);
+
+  // return processedResults;
 }
 
 // 検索結果にコンテキスト情報を追加する関数
@@ -320,102 +318,53 @@ function removeOverlapWithPrevious(currentContent: string, previousContent: stri
   return currentContent;
 }
 
-// 2つのテキスト間のオーバーラップを検出する関数
+// 2つのテキスト間のオーバーラップを検出する関数（マーカーベース）
 function findOverlapBetweenTexts(previousText: string, currentText: string): string {
   if (!previousText || !currentText) {
     return '';
   }
 
-  // 前のテキストの末尾部分（最大200文字）と現在のテキストの先頭部分で比較
-  const maxOverlapLength = Math.min(200, previousText.length, currentText.length);
-  const prevTail = previousText.slice(-maxOverlapLength);
-  const currHead = currentText.slice(0, maxOverlapLength);
-
-  // 文レベルでの重複検出
-  const prevSentences = splitIntoSentences(prevTail);
-  const currSentences = splitIntoSentences(currHead);
-
-  let overlapLength = 0;
-  let maxMatchedSentences = 0;
-
-  // 前のテキストの末尾の文から順に、現在のテキストの先頭とマッチするかチェック
-  for (let i = 0; i < prevSentences.length; i++) {
-    const prevSubset = prevSentences.slice(i);
-    let matchedSentences = 0;
-    let tempOverlapLength = 0;
-
-    for (let j = 0; j < Math.min(prevSubset.length, currSentences.length); j++) {
-      const prevSent = normalizeText(prevSubset[j]);
-      const currSent = normalizeText(currSentences[j]);
-
-      // 文の類似度をチェック（完全一致または高い類似度）
-      if (prevSent === currSent || calculateSimilarity(prevSent, currSent) > 0.8) {
-        matchedSentences++;
-        tempOverlapLength += currSentences[j].length;
-      } else {
-        break; // 連続しない場合は終了
-      }
-    }
-
-    // より多くの文がマッチした場合、その重複を採用
-    if (matchedSentences > maxMatchedSentences) {
-      maxMatchedSentences = matchedSentences;
-      overlapLength = tempOverlapLength;
-    }
+  // 現在のテキストが「...」マーカーで始まっているかチェック
+  const overlapMarkerRegex = /^\.{3,}\s*/;
+  const markerMatch = currentText.match(overlapMarkerRegex);
+  
+  if (!markerMatch) {
+    // マーカーがない場合は重複なしとして処理
+    return '';
   }
 
-  // 重複が検出された場合、実際の重複文字列を返す
-  if (overlapLength > 0 && maxMatchedSentences >= 1) {
-    return currentText.slice(0, overlapLength);
+  // マーカー部分の長さを取得
+  const markerLength = markerMatch[0].length;
+  
+  // マーカー後のコンテンツを取得
+  const contentAfterMarker = currentText.substring(markerLength).trim();
+  
+  // マーカー後のコンテンツが空の場合は重複なしとして処理
+  if (!contentAfterMarker) {
+    return '';
   }
 
-  return '';
-}
-
-// テキストを正規化する関数（比較用）
-function normalizeText(text: string): string {
-  return text
-    .trim()
-    .replace(/\s+/g, ' ') // 連続する空白を単一スペースに
-    .replace(/[。、！？．，!?]/g, '') // 句読点を除去
-    .toLowerCase();
-}
-
-// 2つの文字列の類似度を計算する関数（Jaccard係数ベース）
-function calculateSimilarity(text1: string, text2: string): number {
-  if (!text1 || !text2) return 0;
-  if (text1 === text2) return 1;
-
-  // 文字列を単語（または文字）に分割
-  const words1 = new Set(text1.split(/\s+/));
-  const words2 = new Set(text2.split(/\s+/));
-
-  // 共通要素の数を計算（Array.fromを使用してSetを配列に変換）
-  const words1Array = Array.from(words1);
-  const words2Array = Array.from(words2);
-
-  const intersection = words1Array.filter(word => words2.has(word));
-
-  // 和集合の数を計算
-  const unionSet = new Set();
-  words1Array.forEach(word => unionSet.add(word));
-  words2Array.forEach(word => unionSet.add(word));
-
-  // Jaccard係数を計算
-  return intersection.length / unionSet.size;
-}
-
-// 文への分割（日本語・英語対応）- 重複を避けるため既存関数を活用
-function splitIntoSentences(text: string): string[] {
-  // 日本語の句読点と英語のピリオドで分割
-  const sentences = text.split(/(?<=[。！？.!?])\s*/).filter(s => s.trim());
-
-  // 分割結果が空の場合は元のテキストを返す
-  if (sentences.length === 0) {
-    return [text];
+  // 前のテキストの末尾部分で、マーカー後のコンテンツと一致する部分を検索
+  const maxSearchLength = Math.min(500, previousText.length); // 検索範囲を拡大
+  const searchText = previousText.slice(-maxSearchLength);
+  
+  // マーカー後のコンテンツの最初の文または最初の50文字を取得して一致を確認
+  const firstSentence = contentAfterMarker.split(/[。！？.!?]/)[0];
+  const searchPattern = firstSentence.length > 50 
+    ? firstSentence.substring(0, 50)
+    : firstSentence;
+  
+  // 前のテキストに同じ内容が含まれているかチェック
+  if (searchText.includes(searchPattern)) {
+    // 重複として、マーカーから最初の文までを返す
+    const firstSentenceEnd = contentAfterMarker.indexOf(firstSentence) + firstSentence.length;
+    const overlapEnd = Math.min(firstSentenceEnd + 1, contentAfterMarker.length); // 句読点も含める
+    
+    return currentText.substring(0, markerLength + overlapEnd);
   }
 
-  return sentences;
+  // 重複が確認できない場合はマーカー部分のみを重複として扱う
+  return currentText.substring(0, markerLength);
 }
 
 // // ハイブリッド検索（β）

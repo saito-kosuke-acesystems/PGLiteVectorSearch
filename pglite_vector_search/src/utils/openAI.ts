@@ -83,27 +83,42 @@ export async function generateKeyWord(userMessage: string): Promise<string> {
     }
 }
 
-export async function* streamChatMessage(userMessage: string, memory: any[], chatHistory: any[] = []): AsyncGenerator<string> {
+export async function* streamChatMessage(userMessage: string, memory: any[], chatHistory: any[] = [], useContextSelection: boolean = true): AsyncGenerator<string> {
     try {
         if (!openai) throw new Error('OpenAIクライアントが初期化されていません');
 
-        // 階層型コンテキスト選別を実行
-        const selectedContext = selectOptimalContext(memory, userMessage);
+        let selectedContext: SelectedContext[];
+        let referenceFiles: string[];
+        
+        if (useContextSelection) {
+            // 階層型コンテキスト選別を実行
+            selectedContext = selectOptimalContext(memory, userMessage);
 
-        // 参考ファイル名を取得（選別されたコンテキストから）
-        const referenceFiles = selectedContext.length > 0 ?
-            Array.from(new Set(
-                memory.filter(m => selectedContext.some(ctx => ctx.content === m.content))
-                    .map(m => m.filename)
-                    .filter(f => f)
-            )) : [];
+            // 参考ファイル名を取得（選別されたコンテキストから）
+            referenceFiles = selectedContext.length > 0 ?
+                Array.from(new Set(
+                    memory.filter(m => selectedContext.some(ctx => ctx.content === m.content))
+                        .map(m => m.filename)
+                        .filter(f => f)
+                )) : [];
+        } else {
+            // コンテキスト選別を行わず、全メモリをそのまま使用
+            selectedContext = memory.map(m => ({
+                content: m.content,
+                relevanceScore: 1.0,
+                tokenCount: Math.ceil(m.content.length / 4), // 簡易的なトークン数推定
+                hierarchyLevel: m.heading_level || 0 // heading_levelを使用、なければ0
+            }));
 
-        // 最適化されたシステムプロンプト生成
-        const systemPrompt = generateOptimizedSystemPrompt(selectedContext, userMessage);
+            // 参考ファイル名を取得（全メモリから）
+            referenceFiles = Array.from(new Set(
+                memory.map(m => m.filename).filter(f => f)
+            ));
+        }
 
-        console.log('Original memory count:', memory.length);
-        console.log('Selected context count:', selectedContext.length);
-        console.log('Total tokens estimated:', selectedContext.reduce((sum, ctx) => sum + ctx.tokenCount, 0));
+        // 統一されたシステムプロンプト生成（選別有無に関わらず同じ関数を使用）
+        const systemPrompt: string = generateOptimizedSystemPrompt(selectedContext, userMessage);
+
         console.log('systemPrompt:', systemPrompt);
 
         // メッセージ履歴を構築（システム→履歴→現在の質問の順）
@@ -111,12 +126,14 @@ export async function* streamChatMessage(userMessage: string, memory: any[], cha
             { role: 'system', content: systemPrompt },
             ...chatHistory,
             { role: 'user', content: userMessage }
-        ]; if (useOllamaAPI) {
+        ];
+
+        if (useOllamaAPI) {
             // Ollama APIを使用
             for await (const chunk of ollamaStreamChatMessage(userMessage, memory, systemPrompt, chatHistory)) {
                 yield chunk;
             }
-            // 回答の最後に参考ファイル名と最適化情報を追加
+            // 回答の最後に参考ファイル名を追加
             if (referenceFiles.length > 0) {
                 yield `\n\n【参考ファイル】\n${referenceFiles.join(', ')}`;
             }
@@ -133,7 +150,7 @@ export async function* streamChatMessage(userMessage: string, memory: any[], cha
             const content = chunk.choices?.[0]?.delta?.content;
             if (content) yield content;
         }
-        // 回答の最後に参考ファイル名と最適化情報を追加
+        // 回答の最後に参考ファイル名を追加
         if (referenceFiles.length > 0) {
             yield `\n\n【参考ファイル】\n${referenceFiles.join(', ')}`;
         }
