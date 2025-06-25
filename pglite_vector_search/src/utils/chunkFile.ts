@@ -150,7 +150,8 @@ function parseMarkdownHierarchy(text: string): { hierarchy: HeadingHierarchy, co
                 text: headingText,
                 path
             };
-            currentContent = [];
+            // 見出し行自体をコンテンツの先頭に含める
+            currentContent = [line];
         } else {
             // コンテンツ行
             // 見出しが設定されていない状態で初めてコンテンツが見つかった場合、デフォルト見出しを設定
