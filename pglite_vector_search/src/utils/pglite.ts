@@ -96,9 +96,9 @@ export async function insertMemory(
 
 export async function searchMemory(embedding: number[], limit: number = 3): Promise<any[]> {
   const vec = JSON.stringify(embedding);
-  const threshold = 0.4;  // 距離の閾値（少し緩める）
+  const threshold = 0.4;  // 距離の閾値
 
-  // 階層重み付け、コンテキスト統合、重複排除を含む高精度ベクトル検索
+  // 重複排除を含む純粋なベクトル検索
   const result = await pglite.query(`
     WITH ranked_results AS (
       SELECT 
@@ -116,31 +116,9 @@ export async function searchMemory(embedding: number[], limit: number = 3): Prom
         has_overlap,
         parent_section_id,
         (embedding <=> '${vec}') AS base_distance,
-        -- 階層レベルによる重み付け（見出しレベルが低いほど重要）
-        CASE 
-          WHEN heading_level = 1 THEN 0.9    -- # 見出し（最重要）
-          WHEN heading_level = 2 THEN 0.95   -- ## 見出し
-          WHEN heading_level = 3 THEN 0.97   -- ### 見出し
-          WHEN heading_level >= 4 THEN 0.98  -- #### 以下
-          ELSE 1.0                           -- 見出しなし
-        END AS hierarchy_weight,
-        -- オーバーラップボーナス（文脈情報を多く含む）
-        CASE WHEN has_overlap = true THEN 0.95 ELSE 1.0 END AS overlap_weight,
-        -- チャンク統合スコア（パート1を優先、但し他パートも考慮）
-        CASE 
-          WHEN chunk_part_number = 1 THEN 0.9
-          WHEN chunk_part_number IS NULL THEN 0.95
-          ELSE 1.0 + (chunk_part_number * 0.02)  -- 後のパートほど少しペナルティ
-        END AS chunk_weight
+        (embedding <=> '${vec}') AS final_score -- ベース距離をそのままスコアとして使用
       FROM memory
       WHERE (embedding <=> '${vec}') < ${threshold}
-    ),
-    weighted_results AS (
-      SELECT 
-        *,
-        -- 最終スコア計算（距離に重み付けを適用）
-        base_distance * hierarchy_weight * overlap_weight * chunk_weight AS final_score
-      FROM ranked_results
     ),
     deduplicated_results AS (
       SELECT DISTINCT ON (filename, heading_path, heading_text)
@@ -158,9 +136,8 @@ export async function searchMemory(embedding: number[], limit: number = 3): Prom
         has_overlap,
         parent_section_id,
         base_distance,
-        final_score,
-        content AS enhanced_content
-      FROM weighted_results
+        final_score
+      FROM ranked_results
       ORDER BY filename, heading_path, heading_text, final_score ASC
     )
     SELECT 
@@ -168,7 +145,7 @@ export async function searchMemory(embedding: number[], limit: number = 3): Prom
       filename,
       section,
       section_sequence,
-      enhanced_content as content,
+      content,
       base_distance,
       final_score,
       heading_level,
@@ -179,15 +156,15 @@ export async function searchMemory(embedding: number[], limit: number = 3): Prom
       has_overlap
     FROM deduplicated_results
     ORDER BY final_score ASC
-    LIMIT ${limit};`);
+    LIMIT ${limit * 2};`);
 
-    // チャンクパーツを統合せずに結果を返す
-  return result.rows;
+  // チャンクパーツを統合せずに結果を返す
+  //return result.rows;
 
-  // // 結果の後処理：関連するチャンクパーツの統合
-  // const processedResults = await enhanceResultsWithContext(result.rows, limit);
+  // 結果の後処理：関連するチャンクパーツの統合
+  const processedResults = await enhanceResultsWithContext(result.rows, limit);
 
-  // return processedResults;
+  return processedResults;
 }
 
 // 検索結果にコンテキスト情報を追加する関数
