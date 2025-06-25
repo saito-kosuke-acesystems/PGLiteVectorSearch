@@ -83,7 +83,7 @@ export async function generateKeyWord(userMessage: string): Promise<string> {
     }
 }
 
-export async function* streamChatMessage(userMessage: string, memory: any[], chatHistory: any[] = [], useContextSelection: boolean = true): AsyncGenerator<string> {
+export async function* streamChatMessage(userMessage: string, memory: any[], chatHistory: any[] = [], useContextSelection: boolean = false): AsyncGenerator<string> {
     try {
         if (!openai) throw new Error('OpenAIクライアントが初期化されていません');
 
@@ -105,7 +105,7 @@ export async function* streamChatMessage(userMessage: string, memory: any[], cha
             // コンテキスト選別を行わず、全メモリをそのまま使用
             selectedContext = memory.map(m => ({
                 content: m.content,
-                relevanceScore: 1.0,
+                relevanceScore: 1 - m.final_score,
                 tokenCount: Math.ceil(m.content.length / 4), // 簡易的なトークン数推定
                 hierarchyLevel: m.heading_level || 0 // heading_levelを使用、なければ0
             }));
