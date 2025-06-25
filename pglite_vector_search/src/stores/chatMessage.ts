@@ -105,7 +105,7 @@ export const useChatStore = defineStore(
                 })
                 try {
                     // ファイルをチャンクに分割
-                    const chunks = await chunkFile(file, 500)
+                    const chunks = await chunkFile(file, 512)
                         .catch((reason) => {
                             errorHandler(reason)
                             return []
